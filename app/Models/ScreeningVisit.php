@@ -26,41 +26,46 @@ class ScreeningVisit extends Model
 
     public function client(): BelongsTo
     {
-        return $this->belongsTo(Client::class, 'clientId');
+        return $this->belongsTo(Client::class, 'clientId', 'clientId');
     }
 
     public function facility(): BelongsTo
     {
-        return $this->belongsTo(Facility::class, 'facilityId');
+        return $this->belongsTo(Facility::class, 'facilityId', 'facilityId');
     }
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'createdBy');
+        return $this->belongsTo(User::class, 'createdBy', 'id');
     }
 
     public function cervicalScreening(): HasOne
     {
-        return $this->hasOne(CervicalScreening::class, 'visitId');
+        return $this->hasOne(CervicalScreening::class, 'visitId', 'visitId');
     }
 
     public function breastScreening(): HasOne
     {
-        return $this->hasOne(BreastScreening::class, 'visitId');
+        return $this->hasOne(BreastScreening::class, 'visitId', 'visitId');
     }
 
     public function colorectalScreening(): HasOne
     {
-        return $this->hasOne(ColorectalScreening::class, 'visitId');
+        return $this->hasOne(ColorectalScreening::class, 'visitId', 'visitId');
     }
 
     public function liverScreening(): HasOne
     {
-        return $this->hasOne(LiverScreening::class, 'visitId');
+        return $this->hasOne(LiverScreening::class, 'visitId', 'visitId');
     }
 
     public function prostateScreening(): HasOne
     {
-        return $this->hasOne(ProstateScreening::class, 'visitId');
+        return $this->hasOne(ProstateScreening::class, 'visitId', 'visitId');
+    }
+
+    public function caseOutcome(): HasOne
+    {
+        return $this->hasOne(CaseOutcome::class, 'clientId', 'clientId');
     }
 }

@@ -12,23 +12,78 @@ use Illuminate\Http\Request;
 
 class ScreeningVisitController extends Controller
 {
-    public function index(Client $client): JsonResponse
-    {
-        $this->authorizeClient($client);
+    // public function index(Client $client): JsonResponse
+    // {
+    //     $this->authorizeClient($client);
 
-        $visits = $client->visits()
-            ->with([
-                'cervicalScreening',
-                'breastScreening',
-                'colorectalScreening',
-                'liverScreening',
-                'prostateScreening',
-            ])
-            ->latest('visitDate')
-            ->get();
+    //     $visits = $client->visits()
+    //         ->with([
+    //             'cervicalScreening',
+    //             'breastScreening',
+    //             'colorectalScreening',
+    //             'liverScreening',
+    //             'prostateScreening',
+    //         ])
+    //         ->latest('visitDate')
+    //         ->get();
+
+    //     return response()->json([
+    //         'visits' => $visits,
+    //     ]);
+    // }
+
+
+ public function index(Request $request)
+    {
+        $page = $request->input('page', 1);
+        $search = $request->input('search', '');
+        $visitType = $request->input('visitType', '');
+        $filter = $request->input('filter', '');
+        $limit = $request->input('limit', 10);
+        $offset = ($page - 1) * $limit;
+
+        $query = ScreeningVisit::with(['client.facility', 'cervicalScreening', 'breastScreening', 
+                              'prostateScreening', 'colorectalScreening', 'liverScreening']);
+
+        // Apply search
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('client', function ($clientQuery) use ($search) {
+                    $clientQuery->where('fullName', 'like', "%{$search}%")
+                               ->orWhere('phoneNumber', 'like', "%{$search}%")
+                               ->orWhere('screeningId', 'like', "%{$search}%");
+                })->orWhere('notes', 'like', "%{$search}%");
+            });
+        }
+
+        // Apply visit type filter
+        if ($visitType) {
+            $query->where('visitType', $visitType);
+        }
+
+        // Apply dashboard filters
+        if ($filter === 'this_month') {
+            $query->whereMonth('visitDate', now()->month)
+                  ->whereYear('visitDate', now()->year);
+        } elseif ($filter === 'pending_followups') {
+            $query->where('visitType', 'follow_up')
+                  ->whereDoesntHave('caseOutcome', function ($q) {
+                      $q->where('treatmentCompleted', true);
+                  });
+        }
+
+        $total = $query->count();
+
+        $visits = $query->orderBy('visitDate', 'desc')
+                        ->skip($offset)
+                        ->take($limit)
+                        ->get();
 
         return response()->json([
-            'visits' => $visits,
+            'data' => $visits,
+            'total' => $total,
+            'page' => $page,
+            'limit' => $limit,
         ]);
     }
 

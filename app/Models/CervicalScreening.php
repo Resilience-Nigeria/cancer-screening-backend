@@ -34,6 +34,6 @@ class CervicalScreening extends Model
 
     public function visit(): BelongsTo
     {
-        return $this->belongsTo(ScreeningVisit::class, 'visitId');
+        return $this->belongsTo(ScreeningVisit::class, 'visitId', 'visitId');
     }
 }
