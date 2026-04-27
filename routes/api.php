@@ -65,4 +65,5 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
         Route::get('/dashboard/screenings/{type}', [DashboardController::class, 'getScreeningsByType']);
         Route::get('/dashboard/positive-findings', [DashboardController::class, 'getPositiveFindings']);
 
+        
 });
