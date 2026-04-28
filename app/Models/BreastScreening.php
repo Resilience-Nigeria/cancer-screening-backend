@@ -15,7 +15,7 @@ class BreastScreening extends Model
         'visitId',
         'method',
         'screeningDate',
-        'result',
+        'screeningResult',
         'hpvResult',
         'hpvGenotype',
         'colposcopyDone',

@@ -9,10 +9,11 @@ return new class extends Migration {
     {
         Schema::create('liver_screenings', function (Blueprint $table) {
             $table->id('screeningId');
+            $table->unsignedBigInteger('clientId')->nullable();
             $table->unsignedBigInteger('visitId')->nullable();
             $table->enum('method', ['uss', 'afp']);
-            $table->date('screeningDate');
-            $table->enum('result', ['negative', 'positive', 'suspicious']);
+            $table->date('screeningDate')->nullable();
+            $table->enum('screeningResult', ['negative', 'positive', 'suspicious']);
             $table->enum('hbvStatus', ['positive', 'negative']);
             $table->enum('hcvStatus', ['positive', 'negative']);
             $table->decimal('afpValue', 10, 2)->nullable();
@@ -23,6 +24,7 @@ return new class extends Migration {
 
             $table->unique('visitId');
             $table->foreign('visitId')->references('visitId')->on('screening_visits')->nullOnDelete();
+            $table->foreign('clientId')->references('clientId')->on('clients')->nullOnDelete();
         });
     }
 

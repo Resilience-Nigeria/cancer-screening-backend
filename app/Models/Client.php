@@ -63,4 +63,35 @@ class Client extends Model
     {
         return $this->dateOfBirth ? Carbon::parse($this->dateOfBirth)->age : null;
     }
+
+
+
+    public function cervicalScreening(): HasOne
+    {
+        return $this->hasOne(CervicalScreening::class, 'clientId', 'clientId');
+    }
+ 
+    /**
+     * Get the breast screening for the client
+     */
+    public function breastScreening(): HasOne
+    {
+        return $this->hasOne(BreastScreening::class, 'clientId', 'clientId');
+    }
+ 
+    /**
+     * Get the prostate screening for the client
+     */
+    public function prostateScreening(): HasOne
+    {
+        return $this->hasOne(ProstateScreening::class, 'clientId', 'clientId');
+    }
+ 
+    /**
+     * Get the case outcome for the client
+     */
+    public function caseOutcome(): HasOne
+    {
+        return $this->hasOne(CaseOutcome::class, 'clientId', 'clientId');
+    }
 }

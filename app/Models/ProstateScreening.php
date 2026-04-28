@@ -14,7 +14,7 @@ class ProstateScreening extends Model
         'visitId',
         'method',
         'screeningDate',
-        'result',
+        'screeningResult',
         'psaLevel',
         'dreResult',
         'ipssScore',
@@ -22,6 +22,17 @@ class ProstateScreening extends Model
         'gleasonScore',
         'treatmentReferral',
         'treatmentProvided',
+
+        // Urinary Symptoms
+        'poorUrinaryStream',
+        'urgeIncontinence',
+        'delayStartingUrination',
+        'inabilityToHoldUrine',
+        'terminalDribbling',
+        'frequentDayUrination',
+        'nocturia',
+        'incompleteEmptying',
+        'bloodInUrine',
     ];
 
     protected $casts = [

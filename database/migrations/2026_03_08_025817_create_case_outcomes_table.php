@@ -10,14 +10,14 @@ return new class extends Migration {
         Schema::create('case_outcomes', function (Blueprint $table) {
             $table->id('outcomeId');
             $table->unsignedBigInteger('clientId')->nullable();
-            $table->boolean('cancerConfirmed')->default(false);
+            $table->string('cancerConfirmed')->nullable();
             $table->string('cancerType')->nullable();
             $table->string('stageAtDiagnosis')->nullable();
             $table->date('diagnosisDate')->nullable();
-            $table->boolean('linkageToTreatment')->default(false);
+            $table->string('linkageToTreatment')->nullable();
             $table->string('treatmentFacility')->nullable();
             $table->date('treatmentInitiatedDate')->nullable();
-            $table->boolean('treatmentCompleted')->default(false);
+            $table->string('treatmentCompleted')->nullable();
             $table->enum('treatmentOutcome', [
                 'complete_remission',
                 'partial_remission',
@@ -30,6 +30,46 @@ return new class extends Migration {
                 'long_term_survival_with_chronic_disease',
                 'treatment_related_complications',
             ])->nullable();
+
+
+            $table->date('preScreeningCounselingDate')->nullable();
+            $table->string('preScreeningCounselor')->nullable();
+            $table->enum('preScreeningConsent', ['yes', 'no'])->nullable();
+            
+            $table->enum('screeningResult', ['negative', 'positive', 'inconclusive'])->nullable();
+            $table->date('screeningDate')->nullable();
+            
+            $table->date('postScreeningCounselingDate')->nullable();
+            $table->string('postScreeningCounselor')->nullable();
+            
+            $table->date('nextFollowUpDate')->nullable();
+            $table->enum('followUpEstablished', ['yes', 'no'])->nullable();
+            
+            $table->string('diagnosis')->nullable();
+            $table->string('cancerStage')->nullable();
+            $table->text('stagingComments')->nullable();
+            
+            $table->enum('treatmentCommenced', ['yes', 'no'])->nullable();
+            $table->date('treatmentCommencementDate')->nullable();
+            $table->string('treatmentDelayReason')->nullable();
+            
+            $table->string('treatmentType')->nullable();
+            
+            $table->string('adherenceRating')->nullable();
+            $table->integer('missedAppointments')->nullable();
+            $table->json('missedAppointmentReasons')->nullable();
+            $table->json('adherenceInterventions')->nullable();
+            
+            $table->string('treatmentStatus')->nullable();
+            $table->date('treatmentCompletionDate')->nullable();
+            $table->string('discontinuationReason')->nullable();
+            $table->string('treatmentDuration')->nullable();
+            
+            $table->string('clinicalOutcome')->nullable();
+            $table->date('outcomeAssessmentDate')->nullable();
+            
+            $table->text('remarks')->nullable();
+
             $table->unsignedBigInteger('updatedBy')->nullable();
             $table->timestamps();
 

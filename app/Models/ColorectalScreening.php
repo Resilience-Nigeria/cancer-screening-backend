@@ -14,7 +14,7 @@ class ColorectalScreening extends Model
         'visitId',
         'method',
         'screeningDate',
-        'result',
+        'screeningResult',
         'polypDetected',
         'histologyResult',
         'treatmentReferral',

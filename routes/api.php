@@ -10,7 +10,9 @@ use App\Http\Controllers\Api\LiverScreeningController;
 use App\Http\Controllers\Api\ProstateScreeningController;
 use App\Http\Controllers\Api\RiskProfileController;
 use App\Http\Controllers\Api\ScreeningVisitController;
+use App\Http\Controllers\Api\OutcomeController;
 use App\Http\Controllers\DashboardController;
+
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -30,7 +32,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::patch('/clients/{client}', [ClientController::class, 'update']);
 
     Route::get('/clients/{client}/risk-profile', [RiskProfileController::class, 'show']);
-    Route::put('/clients/{client}/risk-profile', [RiskProfileController::class, 'upsert']);
+    Route::post('/clients/{client}/risk-profile', [RiskProfileController::class, 'upsert']);
 
     Route::get('/clients/{client}/visits', [ScreeningVisitController::class, 'index']);
     Route::post('/clients/{client}/visits', [ScreeningVisitController::class, 'store']);
@@ -65,5 +67,8 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
         Route::get('/dashboard/screenings/{type}', [DashboardController::class, 'getScreeningsByType']);
         Route::get('/dashboard/positive-findings', [DashboardController::class, 'getPositiveFindings']);
 
-        
+
+        Route::get('/outcomes', [OutcomeController::class, 'index']);
+Route::get('/outcomes/statistics', [OutcomeController::class, 'statistics']);
+
 });

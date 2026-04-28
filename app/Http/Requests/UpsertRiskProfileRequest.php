@@ -14,8 +14,8 @@ class UpsertRiskProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'familyHistory' => ['required', 'boolean'],
-            'smokingStatus' => ['nullable', 'in:never,current,former'],
+            'familyHistory' => ['required', 'in:yes,no'],
+            'smokingStatus' => ['nullable', 'in:active_smoker,passive_smoker,ocassional'],
             'alcoholConsumption' => ['nullable', 'in:none,occasional,regular'],
             'weightKg' => ['nullable', 'numeric', 'min:0'],
             'heightCm' => ['nullable', 'numeric', 'min:0'],

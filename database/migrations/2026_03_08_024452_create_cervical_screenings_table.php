@@ -9,10 +9,11 @@ return new class extends Migration {
     {
         Schema::create('cervical_screenings', function (Blueprint $table) {
             $table->id('screeningId');
+            $table->unsignedBigInteger('clientId')->nullable();
             $table->unsignedBigInteger('visitId')->nullable();
             $table->enum('method', ['via', 'pap', 'hpv']);
-            $table->date('screeningDate');
-            $table->enum('result', ['negative', 'positive', 'suspicious']);
+            $table->date('screeningDate')->nullable();
+            $table->enum('screeningResult', ['negative', 'positive', 'suspicious']);
             $table->string('hpvResult')->nullable();
             $table->string('hpvGenotype')->nullable();
             $table->boolean('colposcopyDone')->default(false);
@@ -21,11 +22,12 @@ return new class extends Migration {
             $table->boolean('treatmentProvided')->default(false);
             $table->boolean('referralCompleted')->default(false);
             $table->enum('treatmentReferral', ['referred', 'not_referred'])->nullable();
-
+            
             $table->timestamps();
-
+            
             $table->unique('visitId');
             $table->foreign('visitId')->references('visitId')->on('screening_visits')->nullOnDelete();
+            $table->foreign('clientId')->references('clientId')->on('clients')->nullOnDelete();
         });
     }
 

@@ -10,8 +10,8 @@ return new class extends Migration {
         Schema::create('client_risk_profiles', function (Blueprint $table) {
             $table->id('riskProfileId');
             $table->unsignedBigInteger('clientId')->nullable();
-            $table->boolean('familyHistory')->default(false);
-            $table->enum('smokingStatus', ['never', 'current', 'former'])->nullable();
+            $table->string('familyHistory')->nullable();
+            $table->enum('smokingStatus', ['never', 'active_smoker', 'former_smoker', 'passive_smoker'])->nullable();
             $table->enum('alcoholConsumption', ['none', 'occasional', 'regular'])->nullable();
             $table->decimal('weightKg', 8, 2)->nullable();
             $table->decimal('heightCm', 8, 2)->nullable();
