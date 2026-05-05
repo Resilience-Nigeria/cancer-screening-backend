@@ -1,0 +1,242 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Facility;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+
+class FacilityController extends Controller
+{
+    /**
+     * Get all facilities with stats
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $query = Facility::query();
+
+        // Search
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('facilityName', 'like', "%{$search}%")
+                  ->orWhere('facilityCode', 'like', "%{$search}%")
+                  ->orWhere('facilityState', 'like', "%{$search}%");
+            });
+        }
+
+        // Filter by state
+        if ($request->has('state') && $request->state !== 'all') {
+            $query->where('facilityState', $request->state);
+        }
+
+        // Filter by status
+        if ($request->has('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        $facilities = $query->get()->map(function ($facility) {
+            return [
+                'id' => $facility->facilityId,
+                'facilityName' => $facility->facilityName,
+                'facilityCode' => $facility->facilityCode,
+                'facilityState' => $facility->facilityState,
+                'facilityLga' => $facility->facilityLga,
+                'facilityAddress' => $facility->facilityAddress,
+                'phoneNumber' => $facility->phoneNumber,
+                'email' => $facility->email,
+                'status' => $facility->status,
+                'activeUsers' => $facility->active_users_count,
+                'totalScreenings' => $facility->total_screenings_count,
+                'createdAt' => $facility->created_at,
+                'updatedAt' => $facility->updated_at,
+            ];
+        });
+
+        // Calculate stats
+        $stats = [
+            'total' => Facility::count(),
+            'active' => Facility::where('status', 'active')->count(),
+            'inactive' => Facility::where('status', 'inactive')->count(),
+            'totalUsers' => \DB::table('users')->whereIn('facilityId', Facility::pluck('facilityId'))->count(),
+        ];
+
+        return response()->json([
+            'status' => true,
+            'facilities' => $facilities,
+            'stats' => $stats,
+        ]);
+    }
+
+    /**
+     * Get a single facility
+     */
+    public function show(Facility $facility): JsonResponse
+    {
+        return response()->json([
+            'status' => true,
+            'facility' => [
+                'id' => $facility->facilityId,
+                'facilityName' => $facility->facilityName,
+                'facilityCode' => $facility->facilityCode,
+                'facilityState' => $facility->facilityState,
+                'facilityLga' => $facility->facilityLga,
+                'facilityAddress' => $facility->facilityAddress,
+                'phoneNumber' => $facility->phoneNumber,
+                'email' => $facility->email,
+                'status' => $facility->status,
+                'activeUsers' => $facility->active_users_count,
+                'totalScreenings' => $facility->total_screenings_count,
+                'createdAt' => $facility->created_at,
+                'updatedAt' => $facility->updated_at,
+            ],
+        ]);
+    }
+
+    /**
+     * Create a new facility
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'facilityName' => 'required|string|max:255',
+            'facilityCode' => 'required|string|max:50|unique:facilities,facilityCode',
+            'facilityState' => 'required|string|max:100',
+            'facilityLga' => 'required|string|max:100',
+            'facilityAddress' => 'required|string',
+            'phoneNumber' => 'required|string|max:20',
+            'email' => 'required|email|max:255|unique:facilities,email',
+            'status' => 'sometimes|in:active,inactive',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $facility = Facility::create([
+            'facilityName' => $request->facilityName,
+            'facilityCode' => $request->facilityCode,
+            'facilityState' => $request->facilityState,
+            'facilityLga' => $request->facilityLga,
+            'facilityAddress' => $request->facilityAddress,
+            'phoneNumber' => $request->phoneNumber,
+            'email' => $request->email,
+            'status' => $request->status ?? 'active',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Facility created successfully',
+            'facility' => [
+                'id' => $facility->facilityId,
+                'facilityName' => $facility->facilityName,
+                'facilityCode' => $facility->facilityCode,
+                'facilityState' => $facility->facilityState,
+                'facilityLga' => $facility->facilityLga,
+                'facilityAddress' => $facility->facilityAddress,
+                'phoneNumber' => $facility->phoneNumber,
+                'email' => $facility->email,
+                'status' => $facility->status,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Update a facility
+     */
+    public function update(Request $request, Facility $facility): JsonResponse
+    {
+        // $validator = Validator::make($request->all(), [
+        //     'facilityName' => 'sometimes|required|string|max:255',
+        //     'facilityCode' => 'sometimes|required|string|max:50|unique:facilities,facilityCode,' . $facility->facilityId,
+        //     'facilityState' => 'sometimes|required|string|max:100',
+        //     'facilityLga' => 'sometimes|required|string|max:100',
+        //     'facilityAddress' => 'sometimes|required|string',
+        //     'phoneNumber' => 'sometimes|required|string|max:20',
+        //     'email' => 'sometimes|required|email|max:255|unique:facilities,email,' . $facility->facilityId,
+        //     'status' => 'sometimes|in:active,inactive',
+        // ]);
+
+        // if ($validator->fails()) {
+        //     return response()->json([
+        //         'status' => false,
+        //         'message' => 'Validation failed',
+        //         'errors' => $validator->errors(),
+        //     ], 422);
+        // }
+
+        $facility->update($request->only([
+            'facilityName',
+            'facilityCode',
+            'facilityState',
+            'facilityLga',
+            'facilityAddress',
+            'phoneNumber',
+            'email',
+            'status',
+        ]));
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Facility updated successfully',
+            'facility' => [
+                'id' => $facility->facilityId,
+                'facilityName' => $facility->facilityName,
+                'facilityCode' => $facility->facilityCode,
+                'facilityState' => $facility->facilityState,
+                'facilityLga' => $facility->facilityLga,
+                'facilityAddress' => $facility->facilityAddress,
+                'phoneNumber' => $facility->phoneNumber,
+                'email' => $facility->email,
+                'status' => $facility->status,
+            ],
+        ]);
+    }
+
+    /**
+     * Delete a facility
+     */
+    public function destroy(Facility $facility): JsonResponse
+    {
+        // Check if facility has users
+        if ($facility->users()->count() > 0) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Cannot delete facility with active users. Please reassign users first.',
+            ], 422);
+        }
+
+        $facility->delete();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Facility deleted successfully',
+        ]);
+    }
+
+    /**
+     * Get list of states
+     */
+    public function states(): JsonResponse
+    {
+        $states = [
+            "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa",
+            "Benue", "Borno", "Cross River", "Delta", "Ebonyi", "Edo",
+            "Ekiti", "Enugu", "FCT", "Gombe", "Imo", "Jigawa", "Kaduna",
+            "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa",
+            "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers",
+            "Sokoto", "Taraba", "Yobe", "Zamfara"
+        ];
+
+        return response()->json([
+            'status' => true,
+            'states' => $states,
+        ]);
+    }
+}

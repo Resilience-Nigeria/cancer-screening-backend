@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\RiskProfileController;
 use App\Http\Controllers\Api\ScreeningVisitController;
 use App\Http\Controllers\Api\OutcomeController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Api\FacilityController;
+use App\Http\Controllers\Api\UserController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +28,20 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::middleware(['auth:api', 'facility.scope'])->group(function () {
+    Route::get('/user', function () {
+        $user = auth()->user();
+        return response()->json([
+            'firstName' => $user->firstName,
+            'lastName' => $user->lastName,
+            'otherNames' => $user->otherNames,
+            'email' => $user->email,
+            'role' => $user->role,
+            'roleName' => $user->user_role?->roleName,
+            'id' => $user->id,
+            'message' => 'User authenticated successfully',
+        ]);
+    });
+
     Route::get('/clients', [ClientController::class, 'index']);
     Route::post('/clients', [ClientController::class, 'store']);
     Route::get('/clients/{client}', [ClientController::class, 'show']);
@@ -68,7 +84,25 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
         Route::get('/dashboard/positive-findings', [DashboardController::class, 'getPositiveFindings']);
 
 
-        Route::get('/outcomes', [OutcomeController::class, 'index']);
-Route::get('/outcomes/statistics', [OutcomeController::class, 'statistics']);
+    Route::get('/outcomes', [OutcomeController::class, 'index']);
+    Route::get('/outcomes/statistics', [OutcomeController::class, 'statistics']);
+
+
+        // Facilities Management Routes
+    Route::get('/facilities', [FacilityController::class, 'index']);
+    Route::get('/facilities/states', [FacilityController::class, 'states']);
+    Route::get('/facilities/{facility}', [FacilityController::class, 'show']);
+    Route::post('/facilities', [FacilityController::class, 'store']);
+    Route::put('/facilities/{facility}', [FacilityController::class, 'update']);
+    Route::delete('/facilities/{facility}', [FacilityController::class, 'destroy']);
+
+        // Users Management Routes
+    Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/roles', [UserController::class, 'roles']);
+    Route::get('/users/facilities', [UserController::class, 'facilities']);
+    Route::get('/users/{user}', [UserController::class, 'show']);
+    Route::post('/users', [UserController::class, 'store']);
+    Route::put('/users/{user}', [UserController::class, 'update']);
+    Route::delete('/users/{user}', [UserController::class, 'destroy']);
 
 });
