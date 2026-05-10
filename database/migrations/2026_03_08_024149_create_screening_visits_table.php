@@ -9,13 +9,14 @@ return new class extends Migration {
     {
         Schema::create('screening_visits', function (Blueprint $table) {
             $table->id('visitId');
-            $table->unsignedBigInteger('clientId')->nullable();
+            $table->string('clientId')->nullable();
             $table->unsignedBigInteger('facilityId')->nullable();
             $table->date('visitDate');
             $table->enum('visitType', ['initial', 'follow_up'])->default('initial');
             $table->text('notes')->nullable();
             $table->unsignedBigInteger('createdBy')->nullable();
             $table->timestamps();
+            $table->string('remarks')->nullable();
 
             $table->foreign('clientId')->references('clientId')->on('clients')->nullOnDelete();
             $table->foreign('facilityId')->references('facilityId')->on('facilities')->nullOnDelete();

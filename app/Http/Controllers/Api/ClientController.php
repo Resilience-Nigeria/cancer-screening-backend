@@ -33,28 +33,58 @@ class ClientController extends Controller
         return response()->json($query->paginate(20));
     }
 
+    // public function store(StoreClientRequest $request): JsonResponse
+    // {
+    //     $user = auth('api')->user();
+    //     $facilityId = $user->facilityId;
+
+    //     $client = DB::transaction(function () use ($request, $facilityId) {
+    //         $facility = Facility::findOrFail($facilityId);
+
+    //         $client = Client::create([
+    //             ...$request->validated(),
+    //             'facilityId' => $facilityId,
+    //             'screeningId' => $this->generateScreeningId($facility),
+    //         ]);
+
+    //         return $client->load('facility');
+    //     });
+
+    //     return response()->json([
+    //         'message' => 'Client created successfully',
+    //         'client' => $client,
+    //     ], 201);
+    // }
+
+
     public function store(StoreClientRequest $request): JsonResponse
-    {
-        $user = auth('api')->user();
-        $facilityId = $user->facilityId;
+{
+    $user = auth('api')->user();
+    $facilityId = $user->facilityId;
 
-        $client = DB::transaction(function () use ($request, $facilityId) {
-            $facility = Facility::findOrFail($facilityId);
+    $client = DB::transaction(function () use ($request, $facilityId) {
+        $validated = $request->validated();
+        
+        // Generate clientId based on state and LGA
+        $clientId = $this->generateClientId(
+            $validated['state'], 
+            $validated['lga']
+        );
 
-            $client = Client::create([
-                ...$request->validated(),
-                'facilityId' => $facilityId,
-                'screeningId' => $this->generateScreeningId($facility),
-            ]);
+        $client = Client::create([
+            ...$validated,
+            'clientId' => $clientId,
+            'facilityId' => $facilityId,
+        ]);
 
-            return $client->load('facility');
-        });
+        return $client->load('facility');
+    });
 
-        return response()->json([
-            'message' => 'Client created successfully',
-            'client' => $client,
-        ], 201);
-    }
+    return response()->json([
+        'message' => 'Client created successfully',
+        'client' => $client,
+    ], 201);
+}
 
     public function show(Client $client): JsonResponse
     {
@@ -116,4 +146,35 @@ class ClientController extends Controller
 
         return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
     }
+
+
+
+    protected function generateClientId(string $state, string $lga): string
+{
+    // Get state code (first 3 letters)
+    $stateCode = strtoupper(substr(str_replace(' ', '', $state), 0, 3));
+    
+    // Get LGA code (first 3 letters)
+    $lgaCode = strtoupper(substr(str_replace(' ', '', $lga), 0, 3));
+    
+    // Find last client with this state/LGA combo
+    $prefix = $stateCode . '/' . $lgaCode . '/';
+    
+    $lastClient = Client::where('clientId', 'like', $prefix . '%')
+        ->orderByDesc('clientId')
+        ->first();
+    
+    $nextNumber = 1;
+    
+    if ($lastClient) {
+        // Extract number from format: PLA/JON/000001
+        $parts = explode('/', $lastClient->clientId);
+        if (count($parts) === 3) {
+            $lastNumber = (int) $parts[2];
+            $nextNumber = $lastNumber + 1;
+        }
+    }
+    
+    return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
+}
 }

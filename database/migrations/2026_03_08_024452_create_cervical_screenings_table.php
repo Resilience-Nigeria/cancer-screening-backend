@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         Schema::create('cervical_screenings', function (Blueprint $table) {
             $table->id('screeningId');
-            $table->unsignedBigInteger('clientId')->nullable();
+            $table->string('clientId')->nullable();
             $table->unsignedBigInteger('visitId')->nullable();
             $table->enum('method', ['via', 'pap', 'hpv']);
             $table->date('screeningDate')->nullable();
@@ -24,6 +24,7 @@ return new class extends Migration {
             $table->enum('treatmentReferral', ['referred', 'not_referred'])->nullable();
             
             $table->timestamps();
+            $table->string('remarks')->nullable();
             
             $table->unique('visitId');
             $table->foreign('visitId')->references('visitId')->on('screening_visits')->nullOnDelete();

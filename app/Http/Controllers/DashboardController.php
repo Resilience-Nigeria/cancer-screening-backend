@@ -10,6 +10,7 @@ use App\Models\ColorectalScreening;
 use App\Models\LiverScreening;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use DB;
 
 class DashboardController extends Controller
 {
@@ -260,4 +261,56 @@ class DashboardController extends Controller
             ], 500);
         }
     }
+
+
+
+    // DashboardController.php
+public function allScreenings(Request $request): JsonResponse
+{
+    $user = auth('api')->user();
+    $search = $request->string('search')->toString();
+    $type = $request->string('type')->toString(); // cervical, breast, etc.
+    $perPage = $request->integer('limit', 10);
+
+    // Query all screening types
+    $query = DB::table('screening_visits')
+        ->join('clients', 'screening_visits.clientId', '=', 'clients.clientId')
+        ->leftJoin('cervical_screenings', 'screening_visits.visitId', '=', 'cervical_screenings.visitId')
+        ->leftJoin('breast_screenings', 'screening_visits.visitId', '=', 'breast_screenings.visitId')
+        ->leftJoin('prostate_screenings', 'screening_visits.visitId', '=', 'prostate_screenings.visitId')
+        ->leftJoin('colorectal_screenings', 'screening_visits.visitId', '=', 'colorectal_screenings.visitId')
+        ->leftJoin('liver_screenings', 'screening_visits.visitId', '=', 'liver_screenings.visitId')
+        ->when(!$user->isSuperAdmin(), fn ($q) => $q->where('clients.facilityId', $user->facilityId))
+        ->when($search, function ($q) use ($search) {
+            $q->where(function ($sub) use ($search) {
+                $sub->where('clients.fullName', 'like', "%{$search}%")
+                    ->orWhere('clients.screeningId', 'like', "%{$search}%");
+            });
+        })
+        ->when($type && $type !== 'all', function ($q) use ($type) {
+            $q->whereNotNull("{$type}_screenings.screeningId");
+        })
+        ->select([
+            DB::raw('COALESCE(cervical_screenings.screeningId, breast_screenings.screeningId, prostate_screenings.screeningId, colorectal_screenings.screeningId, liver_screenings.screeningId) as screeningId'),
+            'screening_visits.visitId',
+            'clients.clientId',
+            'clients.screeningId',
+            'clients.fullName',
+            'clients.screeningId as clientScreeningId',
+            'screening_visits.visitDate as screeningDate',
+            DB::raw("CASE 
+                WHEN cervical_screenings.screeningId IS NOT NULL THEN 'cervical'
+                WHEN breast_screenings.screeningId IS NOT NULL THEN 'breast'
+                WHEN prostate_screenings.screeningId IS NOT NULL THEN 'prostate'
+                WHEN colorectal_screenings.screeningId IS NOT NULL THEN 'colorectal'
+                WHEN liver_screenings.screeningId IS NOT NULL THEN 'liver'
+                ELSE NULL
+            END as screening_type"),
+            DB::raw('COALESCE(cervical_screenings.screeningResult, breast_screenings.screeningResult, prostate_screenings.screeningResult, colorectal_screenings.screeningResult, liver_screenings.screeningResult) as result'),
+            // DB::raw('COALESCE(cervical_screenings.remarks, breast_screenings.remarks, prostate_screenings.remarks, colorectal_screenings.remarks, liver_screenings.remarks) as notes'),
+        ])
+        ->latest('screening_visits.visitDate');
+
+    return response()->json($query->paginate($perPage));
+}
 }

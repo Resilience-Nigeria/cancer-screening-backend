@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         Schema::create('client_risk_profiles', function (Blueprint $table) {
             $table->id('riskProfileId');
-            $table->unsignedBigInteger('clientId')->nullable();
+            $table->string('clientId')->nullable();
             $table->string('familyHistory')->nullable();
             $table->enum('smokingStatus', ['never', 'active_smoker', 'former_smoker', 'passive_smoker'])->nullable();
             $table->enum('alcoholConsumption', ['none', 'occasional', 'regular'])->nullable();

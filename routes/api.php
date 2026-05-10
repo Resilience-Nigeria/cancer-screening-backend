@@ -72,7 +72,10 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/clients/{client}/outcome', [CaseOutcomeController::class, 'show']);
     Route::put('/clients/{client}/outcome', [CaseOutcomeController::class, 'upsert']);
 
-    Route::get('/visits', [ScreeningVisitController::class, 'indexAll']);
+    Route::get('/visits', [ScreeningVisitController::class, 'index']);
+
+    // routes/api.php
+Route::get('/dashboard/screenings', [DashboardController::class, 'allScreenings']);
 
 
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);

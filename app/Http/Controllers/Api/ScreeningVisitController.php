@@ -8,7 +8,7 @@ use App\Models\Client;
 use App\Models\ScreeningVisit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-
+use Carbon\Carbon;
 
 class ScreeningVisitController extends Controller
 {
@@ -41,6 +41,8 @@ class ScreeningVisitController extends Controller
         $filter = $request->input('filter', '');
         $limit = $request->input('limit', 10);
         $offset = ($page - 1) * $limit;
+        $currentMonth = Carbon::now()->month;
+        $currentYear = Carbon::now()->year;
 
         $query = ScreeningVisit::with(['client.facility', 'cervicalScreening', 'breastScreening', 
                               'prostateScreening', 'colorectalScreening', 'liverScreening']);
@@ -63,8 +65,8 @@ class ScreeningVisitController extends Controller
 
         // Apply dashboard filters
         if ($filter === 'this_month') {
-            $query->whereMonth('visitDate', now()->month)
-                  ->whereYear('visitDate', now()->year);
+            $query->whereMonth('visitDate', $currentMonth)
+                  ->whereYear('visitDate', $currentYear);
         } elseif ($filter === 'pending_followups') {
             $query->where('visitType', 'follow_up')
                   ->whereDoesntHave('caseOutcome', function ($q) {

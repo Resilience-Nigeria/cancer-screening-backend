@@ -14,6 +14,9 @@ return new class extends Migration {
             $table->string('facilityState')->nullable();
             $table->string('facilityLga')->nullable();
             $table->string('facilityAddress')->nullable();
+            $table->string('email')->nullable();
+            $table->string('phoneNumber')->nullable();
+            $table->string('status')->default('active')->nullable();
             $table->timestamps();
         });
     }

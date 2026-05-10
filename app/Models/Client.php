@@ -12,10 +12,14 @@ class Client extends Model
 {
     protected $table = 'clients';
 
+    // protected $primaryKey = 'screeningId';
     protected $primaryKey = 'clientId';
+public $incrementing = false;
+protected $keyType = 'string';
+
     protected $fillable = [
         'facilityId',
-        'screeningId',
+        'clientId',
         'fullName',
         'gender',
         'dateOfBirth',

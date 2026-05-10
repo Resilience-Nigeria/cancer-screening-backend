@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         Schema::create('colorectal_screenings', function (Blueprint $table) {
             $table->id('screeningId');
-            $table->unsignedBigInteger('clientId')->nullable();
+            $table->string('clientId')->nullable();
             $table->unsignedBigInteger('visitId')->nullable();
             $table->enum('method', ['fit', 'fobt', 'colonoscopy']);
             $table->date('screeningDate')->nullable();
@@ -19,6 +19,7 @@ return new class extends Migration {
             $table->enum('treatmentReferral', ['referred', 'not_referred'])->nullable();
             $table->boolean('treatmentProvided')->default(false);
             $table->timestamps();
+            $table->string('remarks')->nullable();
             
             $table->unique('visitId');
             $table->foreign('visitId')->references('visitId')->on('screening_visits')->nullOnDelete();

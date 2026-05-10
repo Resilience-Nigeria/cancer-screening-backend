@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         Schema::create('case_outcomes', function (Blueprint $table) {
             $table->id('outcomeId');
-            $table->unsignedBigInteger('clientId')->nullable();
+            $table->string('clientId')->nullable();
             $table->string('cancerConfirmed')->nullable();
             $table->string('cancerType')->nullable();
             $table->string('stageAtDiagnosis')->nullable();

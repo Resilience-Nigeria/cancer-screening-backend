@@ -8,9 +8,10 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('clients', function (Blueprint $table) {
-            $table->id('clientId');
+            $table->id('id');
+            $table->string('clientId')->unique();
             $table->unsignedBigInteger('facilityId')->nullable();
-            $table->string('screeningId')->unique();
+            // $table->string('screeningId')->unique();
             $table->string('fullName');
             $table->enum('gender', ['male', 'female']);
             $table->date('dateOfBirth');
