@@ -25,7 +25,7 @@ class ClientController extends Controller
                 $q->where(function ($sub) use ($search) {
                     $sub->where('fullName', 'like', "%{$search}%")
                         ->orWhere('phoneNumber', 'like', "%{$search}%")
-                        ->orWhere('screeningId', 'like', "%{$search}%");
+                        ->orWhere('clientId', 'like', "%{$search}%");
                 });
             })
             ->latest();
@@ -33,58 +33,38 @@ class ClientController extends Controller
         return response()->json($query->paginate(20));
     }
 
-    // public function store(StoreClientRequest $request): JsonResponse
-    // {
-    //     $user = auth('api')->user();
-    //     $facilityId = $user->facilityId;
-
-    //     $client = DB::transaction(function () use ($request, $facilityId) {
-    //         $facility = Facility::findOrFail($facilityId);
-
-    //         $client = Client::create([
-    //             ...$request->validated(),
-    //             'facilityId' => $facilityId,
-    //             'screeningId' => $this->generateScreeningId($facility),
-    //         ]);
-
-    //         return $client->load('facility');
-    //     });
-
-    //     return response()->json([
-    //         'message' => 'Client created successfully',
-    //         'client' => $client,
-    //     ], 201);
-    // }
-
-
     public function store(StoreClientRequest $request): JsonResponse
-{
-    $user = auth('api')->user();
-    $facilityId = $user->facilityId;
+    {
+        $user = auth('api')->user();
+        $facilityId = $user->facilityId;
 
-    $client = DB::transaction(function () use ($request, $facilityId) {
-        $validated = $request->validated();
-        
-        // Generate clientId based on state and LGA
-        $clientId = $this->generateClientId(
-            $validated['state'], 
-            $validated['lga']
-        );
+        $client = DB::transaction(function () use ($request, $facilityId) {
+            $validated = $request->validated();
+            
+            // Get facility for code
+            $facility = Facility::findOrFail($facilityId);
+            
+            // Generate clientId based on facility, state and LGA of residence
+            $clientId = $this->generateClientId(
+                $facility,
+                $validated['stateOfResidence'], 
+                $validated['lgaOfResidence']
+            );
 
-        $client = Client::create([
-            ...$validated,
-            'clientId' => $clientId,
-            'facilityId' => $facilityId,
-        ]);
+            $client = Client::create([
+                ...$validated,
+                'clientId' => $clientId,
+                'facilityId' => $facilityId,
+            ]);
 
-        return $client->load('facility');
-    });
+            return $client->load('facility');
+        });
 
-    return response()->json([
-        'message' => 'Client created successfully',
-        'client' => $client,
-    ], 201);
-}
+        return response()->json([
+            'message' => 'Client created successfully',
+            'client' => $client,
+        ], 201);
+    }
 
     public function show(Client $client): JsonResponse
     {
@@ -127,54 +107,42 @@ class ClientController extends Controller
         }
     }
 
-    protected function generateScreeningId(Facility $facility): string
+    /**
+     * Generate unique client ID based on facility, state and LGA of residence
+     * Format: FAC/XXX/YYY/000001
+     * Where FAC = Facility code, XXX = State code, YYY = LGA code, 000001 = sequential number
+     */
+    protected function generateClientId(Facility $facility, string $state, string $lga): string
     {
-        $year = Carbon::now()->format('Y');
-        $prefix = strtoupper($facility->code) . '-' . $year . '-';
-
-        $lastClient = Client::where('screeningId', 'like', $prefix . '%')
+        // Get facility code (uppercase)
+        $facilityCode = strtoupper($facility->facilityCode);
+        
+        // Get state code (first 3 letters, remove spaces)
+        $stateCode = strtoupper(substr(str_replace(' ', '', $state), 0, 3));
+        
+        // Get LGA code (first 3 letters, remove spaces)
+        $lgaCode = strtoupper(substr(str_replace(' ', '', $lga), 0, 3));
+        
+        // Create prefix: FACILITY/STATE/LGA/
+        $prefix = $facilityCode . '/' . $stateCode . '/' . $lgaCode . '/';
+        
+        // Find the last client with this facility/state/LGA combination
+        $lastClient = Client::where('clientId', 'like', $prefix . '%')
             ->orderByDesc('clientId')
             ->first();
-
+        
         $nextNumber = 1;
-
+        
         if ($lastClient) {
-            $parts = explode('-', $lastClient->screening_id);
-            $lastNumber = (int) end($parts);
-            $nextNumber = $lastNumber + 1;
+            // Extract number from format: UCTH/PLA/JOS/000001
+            $parts = explode('/', $lastClient->clientId);
+            if (count($parts) === 4) {
+                $lastNumber = (int) end($parts);
+                $nextNumber = $lastNumber + 1;
+            }
         }
-
+        
+        // Return formatted client ID: UCTH/PLA/JOS/000001
         return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
     }
-
-
-
-    protected function generateClientId(string $state, string $lga): string
-{
-    // Get state code (first 3 letters)
-    $stateCode = strtoupper(substr(str_replace(' ', '', $state), 0, 3));
-    
-    // Get LGA code (first 3 letters)
-    $lgaCode = strtoupper(substr(str_replace(' ', '', $lga), 0, 3));
-    
-    // Find last client with this state/LGA combo
-    $prefix = $stateCode . '/' . $lgaCode . '/';
-    
-    $lastClient = Client::where('clientId', 'like', $prefix . '%')
-        ->orderByDesc('clientId')
-        ->first();
-    
-    $nextNumber = 1;
-    
-    if ($lastClient) {
-        // Extract number from format: PLA/JON/000001
-        $parts = explode('/', $lastClient->clientId);
-        if (count($parts) === 3) {
-            $lastNumber = (int) $parts[2];
-            $nextNumber = $lastNumber + 1;
-        }
-    }
-    
-    return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
-}
 }

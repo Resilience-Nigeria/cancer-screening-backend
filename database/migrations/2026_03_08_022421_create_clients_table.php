@@ -15,11 +15,14 @@ return new class extends Migration {
             $table->string('fullName');
             $table->enum('gender', ['male', 'female']);
             $table->date('dateOfBirth');
+            $table->string('age');
             $table->string('phoneNumber', 30)->nullable();
             $table->enum('screeningCategory', ['new_client', 'follow_up'])->default('new_client');
-            $table->string('state')->nullable();
-            $table->string('lga')->nullable();
-            $table->string('residence')->nullable();
+            $table->string('stateOfOrigin')->nullable();
+            $table->string('lgaOfOrigin')->nullable();
+            $table->string('stateOfResidence')->nullable();
+            $table->string('lgaOfResidence')->nullable();
+            $table->text('address')->nullable();
             $table->date('registrationDate');
             $table->timestamps();
 

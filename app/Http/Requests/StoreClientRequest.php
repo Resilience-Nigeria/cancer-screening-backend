@@ -19,10 +19,22 @@ class StoreClientRequest extends FormRequest
             'dateOfBirth' => ['required', 'date', 'before_or_equal:today'],
             'phoneNumber' => ['nullable', 'string', 'max:30'],
             'screeningCategory' => ['required', 'in:new_client,follow_up'],
-            'state' => ['nullable', 'string', 'max:255'],
-            'lga' => ['nullable', 'string', 'max:255'],
-            'residence' => ['nullable', 'string', 'max:255'],
+            'stateOfOrigin' => ['required', 'string', 'max:255'],
+            'lgaOfOrigin' => ['required', 'string', 'max:255'],
+            'stateOfResidence' => ['required', 'string', 'max:255'],
+            'lgaOfResidence' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:300'],
             'registrationDate' => ['required', 'date'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'stateOfOrigin.required' => 'The state of origin field is required.',
+            'lgaOfOrigin.required' => 'The LGA of origin field is required.',
+            'stateOfResidence.required' => 'The state of residence field is required.',
+            'lgaOfResidence.required' => 'The LGA of residence field is required.',
         ];
     }
 }

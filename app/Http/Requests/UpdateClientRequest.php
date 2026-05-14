@@ -13,15 +13,29 @@ class UpdateClientRequest extends FormRequest
 
     public function rules(): array
     {
+        // return [
+        //     'fullName' => ['sometimes', 'required', 'string', 'max:255'],
+        //     'gender' => ['sometimes', 'required', 'in:male,female'],
+        //     'dateOfBirth' => ['sometimes', 'required', 'date', 'before_or_equal:today'],
+        //     'phoneNumber' => ['nullable', 'string', 'max:30'],
+        //     'screeningCategory' => ['sometimes', 'required', 'in:new_client,follow_up'],
+        //     'state' => ['nullable', 'string', 'max:255'],
+        //     'lga' => ['nullable', 'string', 'max:255'],
+        //     'residence' => ['nullable', 'string', 'max:255'],
+        //     'registrationDate' => ['sometimes', 'required', 'date'],
+        // ];
+
         return [
-            'fullName' => ['sometimes', 'required', 'string', 'max:255'],
+             'fullName' => ['sometimes', 'required', 'string', 'max:255'],
             'gender' => ['sometimes', 'required', 'in:male,female'],
             'dateOfBirth' => ['sometimes', 'required', 'date', 'before_or_equal:today'],
             'phoneNumber' => ['nullable', 'string', 'max:30'],
             'screeningCategory' => ['sometimes', 'required', 'in:new_client,follow_up'],
-            'state' => ['nullable', 'string', 'max:255'],
-            'lga' => ['nullable', 'string', 'max:255'],
-            'residence' => ['nullable', 'string', 'max:255'],
+            'stateOfOrigin' => ['nullable', 'string', 'max:255'],
+            'lgaOfOrigin' => ['nullable', 'string', 'max:255'],
+            'stateOfResidence' => ['nullable', 'string', 'max:255'],
+            'lgaOfResidence' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:300'],
             'registrationDate' => ['sometimes', 'required', 'date'],
         ];
     }

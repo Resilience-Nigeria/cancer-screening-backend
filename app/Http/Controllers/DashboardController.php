@@ -172,7 +172,7 @@ class DashboardController extends Controller
                 ->get()
                 ->map(function ($screening) {
                     return [
-                        'screeningId' => $screening->screeningId,
+                        // 'screeningId' => $screening->screeningId,
                         'visitId' => $screening->visitId,
                         'clientId' => $screening->visit->client->clientId ?? null,
                         'screeningDate' => $screening->screeningDate,
@@ -264,7 +264,7 @@ class DashboardController extends Controller
 
 
 
-    // DashboardController.php
+   // DashboardController.php
 public function allScreenings(Request $request): JsonResponse
 {
     $user = auth('api')->user();
@@ -284,7 +284,8 @@ public function allScreenings(Request $request): JsonResponse
         ->when($search, function ($q) use ($search) {
             $q->where(function ($sub) use ($search) {
                 $sub->where('clients.fullName', 'like', "%{$search}%")
-                    ->orWhere('clients.screeningId', 'like', "%{$search}%");
+                    ->orWhere('clients.clientId', 'like', "%{$search}%")
+                    ->orWhere('clients.phoneNumber', 'like', "%{$search}%");
             });
         })
         ->when($type && $type !== 'all', function ($q) use ($type) {
@@ -294,9 +295,9 @@ public function allScreenings(Request $request): JsonResponse
             DB::raw('COALESCE(cervical_screenings.screeningId, breast_screenings.screeningId, prostate_screenings.screeningId, colorectal_screenings.screeningId, liver_screenings.screeningId) as screeningId'),
             'screening_visits.visitId',
             'clients.clientId',
-            'clients.screeningId',
             'clients.fullName',
-            'clients.screeningId as clientScreeningId',
+            'clients.phoneNumber',
+            'clients.gender',
             'screening_visits.visitDate as screeningDate',
             DB::raw("CASE 
                 WHEN cervical_screenings.screeningId IS NOT NULL THEN 'cervical'
@@ -313,4 +314,32 @@ public function allScreenings(Request $request): JsonResponse
 
     return response()->json($query->paginate($perPage));
 }
+
+
+// DashboardController.php
+public function monthlyTrend(): JsonResponse
+{
+    $user = auth('api')->user();
+    
+    // Get data for the last 7 months
+    $trend = DB::table('screening_visits')
+        ->selectRaw("
+            DATE_FORMAT(visitDate, '%b') as month,
+            COUNT(*) as screenings,
+            SUM(CASE WHEN needsReferral = 1 THEN 1 ELSE 0 END) as referrals
+        ")
+        ->when(!$user->isSuperAdmin(), fn($q) => $q
+            ->join('clients', 'screening_visits.clientId', '=', 'clients.clientId')
+            ->where('clients.facilityId', $user->facilityId)
+        )
+        ->where('visitDate', '>=', now()->subMonths(6)->startOfMonth())
+        ->groupBy('month')
+        ->orderBy(DB::raw('MIN(visitDate)'))
+        ->get();
+    
+    return response()->json([
+        'data' => $trend
+    ]);
+}
+
 }

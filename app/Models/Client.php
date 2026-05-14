@@ -23,11 +23,14 @@ protected $keyType = 'string';
         'fullName',
         'gender',
         'dateOfBirth',
+        'age',
         'phoneNumber',
         'screeningCategory',
-        'state',
-        'lga',
-        'residence',
+        'stateOfOrigin',
+        'lgaOfOrigin',
+        'stateOResidence',
+        'lgaOfResidence',
+        'address',
         'registrationDate',
     ];
 
