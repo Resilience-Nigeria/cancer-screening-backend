@@ -17,13 +17,14 @@ class StoreClientRequest extends FormRequest
             'fullName' => ['required', 'string', 'max:255'],
             'gender' => ['required', 'in:male,female'],
             'dateOfBirth' => ['required', 'date', 'before_or_equal:today'],
-            'phoneNumber' => ['nullable', 'string', 'max:30'],
+            'phoneNumber' => ['required', 'string', 'max:30'],
             'screeningCategory' => ['required', 'in:new_client,follow_up'],
             'stateOfOrigin' => ['required', 'string', 'max:255'],
             'lgaOfOrigin' => ['required', 'string', 'max:255'],
             'stateOfResidence' => ['required', 'string', 'max:255'],
             'lgaOfResidence' => ['required', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:300'],
+            'landmark' => ['nullable', 'string', 'max:300'],
             'registrationDate' => ['required', 'date'],
         ];
     }

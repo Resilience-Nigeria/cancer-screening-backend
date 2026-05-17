@@ -31,6 +31,7 @@ protected $keyType = 'string';
         'stateOResidence',
         'lgaOfResidence',
         'address',
+        'landmark',
         'registrationDate',
     ];
 

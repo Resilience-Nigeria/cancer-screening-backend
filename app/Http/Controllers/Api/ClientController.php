@@ -7,6 +7,7 @@ use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
 use App\Models\Client;
 use App\Models\Facility;
+use App\Services\LgaCodeMapping;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -66,8 +67,13 @@ class ClientController extends Controller
         ], 201);
     }
 
-    public function show(Client $client): JsonResponse
+    /**
+     * Show client by clientId (string format: FMCJ-ABI-ABS-000001)
+     */
+    public function show(string $clientId): JsonResponse
     {
+        $client = Client::where('clientId', $clientId)->firstOrFail();
+        
         $this->authorizeClient($client);
 
         $client->load([
@@ -86,8 +92,13 @@ class ClientController extends Controller
         ]);
     }
 
-    public function update(UpdateClientRequest $request, Client $client): JsonResponse
+    /**
+     * Update client by clientId (string format: FMCJ-ABI-ABS-000001)
+     */
+    public function update(UpdateClientRequest $request, string $clientId): JsonResponse
     {
+        $client = Client::where('clientId', $clientId)->firstOrFail();
+        
         $this->authorizeClient($client);
 
         $client->update($request->validated());
@@ -109,8 +120,10 @@ class ClientController extends Controller
 
     /**
      * Generate unique client ID based on facility, state and LGA of residence
-     * Format: FAC/XXX/YYY/000001
+     * Format: FAC-XXX-YYY-000001
      * Where FAC = Facility code, XXX = State code, YYY = LGA code, 000001 = sequential number
+     * 
+     * Uses LgaCodeMapping service to ensure unique LGA codes (e.g., Aba North = ABN, Aba South = ABS)
      */
     protected function generateClientId(Facility $facility, string $state, string $lga): string
     {
@@ -120,11 +133,23 @@ class ClientController extends Controller
         // Get state code (first 3 letters, remove spaces)
         $stateCode = strtoupper(substr(str_replace(' ', '', $state), 0, 3));
         
-        // Get LGA code (first 3 letters, remove spaces)
-        $lgaCode = strtoupper(substr(str_replace(' ', '', $lga), 0, 3));
+        // Get unique LGA code from the mapping service
+        $lgaCode = LgaCodeMapping::getLgaCode($state, $lga);
         
-        // Create prefix: FACILITY/STATE/LGA/
-        $prefix = $facilityCode . '/' . $stateCode . '/' . $lgaCode . '/';
+        // Fallback if LGA not found in mapping (shouldn't happen with proper validation)
+        if (!$lgaCode) {
+            // Log this for debugging - it means the LGA isn't in our mapping
+            \Log::warning("LGA not found in mapping", [
+                'state' => $state,
+                'lga' => $lga
+            ]);
+            
+            // Use first 3 characters as fallback
+            $lgaCode = strtoupper(substr(str_replace(' ', '', $lga), 0, 3));
+        }
+        
+        // Create prefix: FACILITY-STATE-LGA-
+        $prefix = $facilityCode . '-' . $stateCode . '-' . $lgaCode . '-';
         
         // Find the last client with this facility/state/LGA combination
         $lastClient = Client::where('clientId', 'like', $prefix . '%')
@@ -134,15 +159,15 @@ class ClientController extends Controller
         $nextNumber = 1;
         
         if ($lastClient) {
-            // Extract number from format: UCTH/PLA/JOS/000001
-            $parts = explode('/', $lastClient->clientId);
+            // Extract number from format: UCTH-PLA-JNO-000001
+            $parts = explode('-', $lastClient->clientId);
             if (count($parts) === 4) {
                 $lastNumber = (int) end($parts);
                 $nextNumber = $lastNumber + 1;
             }
         }
         
-        // Return formatted client ID: UCTH/PLA/JOS/000001
+        // Return formatted client ID: UCTH-PLA-JNO-000001
         return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
     }
 }
