@@ -11,21 +11,78 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
     /**
-     * Get all users with filters (respects role hierarchy)
+     * Generate a secure random password
+     */
+    private function generatePassword(): string
+    {
+        // Generate a random password with uppercase, lowercase, numbers
+        $password = Str::upper(Str::random(2)) . 
+                   Str::lower(Str::random(4)) . 
+                   rand(100, 999) . 
+                   Str::random(1);
+        
+        return $password;
+    }
+
+    /**
+     * Send welcome email with credentials
+     */
+    private function sendWelcomeEmail(User $user, string $plainPassword): void
+    {
+        try {
+            Mail::send('emails.welcome', [
+                'user' => $user,
+                'password' => $plainPassword,
+                'loginUrl' => config('app.frontend_url') . '/login',
+            ], function ($message) use ($user) {
+                $message->to($user->email, $user->firstName . ' ' . $user->lastName)
+                        ->subject('Welcome to NCSR - Your Account Details');
+            });
+        } catch (\Exception $e) {
+            // Log the error but don't fail the user creation
+            \Log::error('Failed to send welcome email: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get all users with filters (respects role hierarchy and hides super admins)
      */
     public function index(Request $request): JsonResponse
     {
         $currentUser = Auth::user();
-        $query = User::with(['facility']);
+        $query = User::with(['facility', 'user_role']);
 
-        // Super admin sees all users
-        // Facility admin sees only users in their facility
-        if ($currentUser->role !== 'SUPER_ADMIN') {
-            $query->where('facilityId', $currentUser->facilityId);
+        // Get current user's role name
+        $currentUserRole = $currentUser->user_role?->roleName;
+
+        // Filter users based on current user's role
+        if ($currentUserRole === 'SUPER_ADMIN') {
+            $query->whereHas('user_role', function($q) {
+                $q->whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'DATA_CLERK']);
+            });
+        } 
+        elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+            $query->where('facilityId', $currentUser->facilityId)
+                  ->whereHas('user_role', function($q) {
+                      $q->where('roleName', 'DATA_CLERK');
+                  });
+        }
+        elseif ($currentUserRole === 'NICRAT_STAFF') {
+            $query->whereHas('user_role', function($q) {
+                $q->whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'DATA_CLERK']);
+            });
+        }
+        else {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to view users',
+            ], 403);
         }
 
         // Search
@@ -39,9 +96,11 @@ class UserController extends Controller
             });
         }
 
-        // Filter by facility (only super admin can filter by facility)
-        if ($request->has('facility') && $request->facility !== 'all' && $currentUser->role === 'SUPER_ADMIN') {
-            $query->where('facilityId', $request->facility);
+        // Filter by facility
+        if ($request->has('facility') && $request->facility !== 'all') {
+            if (in_array($currentUserRole, ['SUPER_ADMIN', 'NICRAT_STAFF'])) {
+                $query->where('facilityId', $request->facility);
+            }
         }
 
         // Filter by role
@@ -62,11 +121,12 @@ class UserController extends Controller
                 'email' => $user->email,
                 'phoneNumber' => $user->phoneNumber,
                 'alternatePhoneNumber' => $user->alternatePhoneNumber,
-                'role' => $user->user_role->roleName,
+                'role' => $user->user_role?->roleName ?? $user->role,
                 'status' => $user->status,
                 'facilityId' => $user->facilityId,
                 'facility' => $user->facility ? [
                     'id' => $user->facility->id,
+                    'facilityId' => $user->facility->facilityId,
                     'facilityName' => $user->facility->facilityName,
                     'facilityCode' => $user->facility->facilityCode,
                 ] : null,
@@ -75,11 +135,22 @@ class UserController extends Controller
             ];
         });
 
-        // Calculate stats based on user's access
-        if ($currentUser->role === 'SUPER_ADMIN') {
-            $statsQuery = User::query();
+        // Calculate stats
+        if ($currentUserRole === 'SUPER_ADMIN') {
+            $statsQuery = User::whereHas('user_role', function($q) {
+                $q->whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'DATA_CLERK']);
+            });
+        } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+            $statsQuery = User::where('facilityId', $currentUser->facilityId)
+                              ->whereHas('user_role', function($q) {
+                                  $q->where('roleName', 'DATA_CLERK');
+                              });
+        } elseif ($currentUserRole === 'NICRAT_STAFF') {
+            $statsQuery = User::whereHas('user_role', function($q) {
+                $q->whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'DATA_CLERK']);
+            });
         } else {
-            $statsQuery = User::where('facilityId', $currentUser->facilityId);
+            $statsQuery = User::where('id', 0);
         }
 
         $stats = [
@@ -105,16 +176,38 @@ class UserController extends Controller
     public function show(User $user): JsonResponse
     {
         $currentUser = Auth::user();
+        $currentUserRole = $currentUser->user_role?->roleName;
 
-        // Check access: super admin sees all, facility admin sees only their facility
-        if ($currentUser->role !== 'SUPER_ADMIN' && $user->facilityId !== $currentUser->facilityId) {
+        // Check access based on role
+        if ($currentUserRole === 'SUPER_ADMIN') {
+            if ($user->user_role?->roleName === 'SUPER_ADMIN' && $user->id !== $currentUser->id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized access',
+                ], 403);
+            }
+        } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+            if ($user->facilityId !== $currentUser->facilityId) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized access',
+                ], 403);
+            }
+        } elseif ($currentUserRole === 'NICRAT_STAFF') {
+            if ($user->user_role?->roleName === 'SUPER_ADMIN') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized access',
+                ], 403);
+            }
+        } else {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized access',
             ], 403);
         }
 
-        $user->load('facility');
+        $user->load(['facility', 'user_role']);
 
         return response()->json([
             'status' => true,
@@ -126,10 +219,12 @@ class UserController extends Controller
                 'phoneNumber' => $user->phoneNumber,
                 'alternatePhoneNumber' => $user->alternatePhoneNumber,
                 'role' => $user->role,
+                'user_role' => $user->user_role,
                 'status' => $user->status,
                 'facilityId' => $user->facilityId,
                 'facility' => $user->facility ? [
-                    'id' => $user->facility->facilityId,
+                    'id' => $user->facility->id,
+                    'facilityId' => $user->facility->facilityId,
                     'facilityName' => $user->facility->facilityName,
                     'facilityCode' => $user->facility->facilityCode,
                 ] : null,
@@ -140,7 +235,7 @@ class UserController extends Controller
     }
 
     /**
-     * Create a new user (respects role hierarchy)
+     * Create a new user with auto-generated password
      */
     public function store(Request $request): JsonResponse
     {
@@ -152,9 +247,9 @@ class UserController extends Controller
             'email' => 'required|email|max:255|unique:users,email',
             'phoneNumber' => 'required|string|max:20',
             'alternatePhoneNumber' => 'nullable|string|max:20',
-            'password' => 'required|string|min:8',
-            'role' => 'required|string',
-            'facilityId' => 'required|exists:facilities,id',
+            // Password field removed - will be auto-generated
+            'role' => 'required|string|exists:roles,roleId',
+            'facilityId' => 'required|exists:facilities,facilityId',
             'status' => 'sometimes|in:active,inactive',
         ]);
 
@@ -166,62 +261,95 @@ class UserController extends Controller
             ], 422);
         }
 
+        // Get the role being assigned
+        $roleBeingAssigned = Role::where('roleId', $request->role)->first();
+        
+        if (!$roleBeingAssigned) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Invalid role specified',
+            ], 422);
+        }
+
+        // Get current user's role name
+        $currentUserRole = $currentUser->user_role?->roleName;
+
         // Role-based validation
-        if ($currentUser->role === 'SUPER_ADMIN') {
-            // Super admin can only create facility_admin role
-            if ($request->role !== 'facility_admin') {
+        if ($currentUserRole === 'SUPER_ADMIN') {
+            $allowedRoles = ['NICRAT_STAFF', 'HOSPITAL_ADMIN'];
+            
+            if (!in_array($roleBeingAssigned->roleName, $allowedRoles)) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'Super admin can only create facility administrators',
-                ], 403);
-            }
-        } elseif ($currentUser->role === 'facility_admin') {
-            // Facility admin cannot create SUPER_ADMIN or facility_admin
-            if (in_array($request->role, ['SUPER_ADMIN', 'facility_admin'])) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'You cannot create super admin or facility admin users',
+                    'message' => 'Super admin can only create NICRAT Staff and Hospital Administrators',
                 ], 403);
             }
 
-            // Facility admin can only create users in their own facility
+            if ($roleBeingAssigned->roleName === 'HOSPITAL_ADMIN' && !$request->facilityId) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Hospital administrators must be assigned to a facility',
+                ], 422);
+            }
+        } 
+        elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+            if ($roleBeingAssigned->roleName !== 'DATA_CLERK') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Hospital administrators can only create Data Clerks',
+                ], 403);
+            }
+
             if ($request->facilityId != $currentUser->facilityId) {
                 return response()->json([
                     'status' => false,
                     'message' => 'You can only create users in your own facility',
                 ], 403);
             }
-        } else {
+
+            $request->merge(['facilityId' => $currentUser->facilityId]);
+        } 
+        else {
             return response()->json([
                 'status' => false,
                 'message' => 'You do not have permission to create users',
             ], 403);
         }
 
+        // Generate random password
+        $plainPassword = $this->generatePassword();
+
+        // Create the user
         $user = User::create([
             'firstName' => $request->firstName,
             'lastName' => $request->lastName,
             'email' => $request->email,
             'phoneNumber' => $request->phoneNumber,
             'alternatePhoneNumber' => $request->alternatePhoneNumber,
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($plainPassword),
             'role' => $request->role,
             'facilityId' => $request->facilityId,
             'status' => $request->status ?? 'active',
         ]);
 
-        $user->load('facility');
+        // Load relationships
+        $user->load(['facility', 'user_role']);
+
+        // Send welcome email with credentials
+        $this->sendWelcomeEmail($user, $plainPassword);
 
         return response()->json([
             'status' => true,
-            'message' => 'User created successfully',
+            'message' => 'User created successfully. Login credentials have been sent to their email.',
             'user' => [
                 'id' => $user->id,
                 'firstName' => $user->firstName,
                 'lastName' => $user->lastName,
                 'email' => $user->email,
                 'phoneNumber' => $user->phoneNumber,
+                'alternatePhoneNumber' => $user->alternatePhoneNumber,
                 'role' => $user->role,
+                'user_role' => $user->user_role,
                 'facilityId' => $user->facilityId,
                 'facility' => $user->facility,
                 'status' => $user->status,
@@ -229,38 +357,20 @@ class UserController extends Controller
         ], 201);
     }
 
-    /**
-     * Update a user (respects role hierarchy)
-     */
-    public function update(Request $request, User $user): JsonResponse
+    public function update(Request $request, $id): JsonResponse
     {
         $currentUser = Auth::user();
-
-        // Access check
-        if ($currentUser->user_role?->roleName  === 'FACILITY_ADMIN' && $user->facilityId !== $currentUser->facilityId) {
-            return response()->json([
-                'status' => false,
-                'message' => 'You can only update users in your own facility',
-            ], 403);
-        }
-
-        // Cannot update SUPER_ADMIN or facility_admin if you're not SUPER_ADMIN
-        if ($currentUser->user_role?->roleName  === 'FACILITY_ADMIN' && in_array($user->user_role?->roleName, ['SUPER_ADMIN', 'FACILITY_ADMIN'])) {
-            return response()->json([
-                'status' => false,
-                'message' => 'You cannot update super admin or facility admin users',
-            ], 403);
-        }
+        $user = User::with(['facility', 'user_role'])->findOrFail($id);
 
         $validator = Validator::make($request->all(), [
-            'firstName' => 'sometimes|required|string|max:255',
-            'lastName' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|max:255|unique:users,email,' . $user->id,
-            'phoneNumber' => 'sometimes|required|string|max:20',
+            'firstName' => 'sometimes|string|max:255',
+            'lastName' => 'sometimes|string|max:255',
+            'email' => 'sometimes|email|max:255|unique:users,email,' . $id,
+            'phoneNumber' => 'sometimes|string|max:20',
             'alternatePhoneNumber' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8',
-            'role' => 'sometimes|required|string',
-            'facilityId' => 'sometimes|required|exists:facilities,id',
+            'role' => 'sometimes|string|exists:roles,roleId',
+            'facilityId' => 'sometimes|exists:facilities,facilityId',
             'status' => 'sometimes|in:active,inactive',
         ]);
 
@@ -272,44 +382,67 @@ class UserController extends Controller
             ], 422);
         }
 
-        // Role change validation
-        if ($request->has('role')) {
-            if ($currentUser->role === 'FACILITY_ADMIN' && in_array($request->role, ['SUPER_ADMIN', 'FACILITY_ADMIN'])) {
+        $currentUserRole = $currentUser->user_role?->roleName;
+
+        // Role-based update validation
+        if ($currentUserRole === 'SUPER_ADMIN') {
+            if ($user->user_role?->roleName === 'SUPER_ADMIN' && $user->id !== $currentUser->id) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'You cannot assign super admin or facility admin roles',
+                    'message' => 'You cannot edit other super administrators',
                 ], 403);
             }
-        }
-
-        // Facility change validation
-        if ($request->has('facilityId') && $currentUser->role === 'FACILITY_ADMIN') {
-            if ($request->facilityId != $currentUser->facilityId) {
+        } 
+        elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+            if ($user->facilityId !== $currentUser->facilityId) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'You cannot transfer users to other facilities',
+                    'message' => 'You can only edit users in your own facility',
                 ], 403);
             }
+
+            if ($request->has('role')) {
+                $newRole = Role::where('roleId', $request->role)->first();
+                if (in_array($newRole?->roleName, ['SUPER_ADMIN', 'HOSPITAL_ADMIN', 'NICRAT_STAFF'])) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'You cannot assign super admin, NICRAT staff, or hospital admin roles',
+                    ], 403);
+                }
+            }
+
+            if ($request->has('facilityId') && $request->facilityId != $currentUser->facilityId) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'You cannot assign users to other facilities',
+                ], 403);
+            }
+        } 
+        else {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to edit users',
+            ], 403);
         }
 
-        $updateData = $request->only([
-            'firstName',
-            'lastName',
-            'email',
-            'phoneNumber',
-            'alternatePhoneNumber',
-            'role',
-            'facilityId',
-            'status',
+        // Update user
+        $user->update([
+            'firstName' => $request->firstName ?? $user->firstName,
+            'lastName' => $request->lastName ?? $user->lastName,
+            'email' => $request->email ?? $user->email,
+            'phoneNumber' => $request->phoneNumber ?? $user->phoneNumber,
+            'alternatePhoneNumber' => $request->alternatePhoneNumber ?? $user->alternatePhoneNumber,
+            'role' => $request->role ?? $user->role,
+            'facilityId' => $request->facilityId ?? $user->facilityId,
+            'status' => $request->status ?? $user->status,
         ]);
 
-        // Only update password if provided
+        // Update password if provided
         if ($request->filled('password')) {
-            $updateData['password'] = Hash::make($request->password);
+            $user->update(['password' => Hash::make($request->password)]);
         }
 
-        $user->update($updateData);
-        $user->load('facility');
+        $user->load(['facility', 'user_role']);
 
         return response()->json([
             'status' => true,
@@ -320,7 +453,9 @@ class UserController extends Controller
                 'lastName' => $user->lastName,
                 'email' => $user->email,
                 'phoneNumber' => $user->phoneNumber,
+                'alternatePhoneNumber' => $user->alternatePhoneNumber,
                 'role' => $user->role,
+                'user_role' => $user->user_role,
                 'facilityId' => $user->facilityId,
                 'facility' => $user->facility,
                 'status' => $user->status,
@@ -328,24 +463,23 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * Delete a user (respects role hierarchy)
-     */
-    public function destroy(User $user): JsonResponse
+    public function destroy($id): JsonResponse
     {
         $currentUser = Auth::user();
+        $user = User::with('user_role')->findOrFail($id);
 
-        // Don't allow deleting yourself
-        if ($user->id === $currentUser->id) {
-            return response()->json([
-                'status' => false,
-                'message' => 'You cannot delete your own account',
-            ], 422);
-        }
+        $currentUserRole = $currentUser->user_role?->roleName;
 
-        // Access check
-        if ($currentUser->user_role?->roleName === 'FACILITY_ADMIN') {
-            // Can only delete users in their facility
+        // Role-based delete validation
+        if ($currentUserRole === 'SUPER_ADMIN') {
+            if ($user->user_role?->roleName === 'SUPER_ADMIN') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'You cannot delete super administrators',
+                ], 403);
+            }
+        } 
+        elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
             if ($user->facilityId !== $currentUser->facilityId) {
                 return response()->json([
                     'status' => false,
@@ -353,13 +487,26 @@ class UserController extends Controller
                 ], 403);
             }
 
-            // Cannot delete SUPER_ADMIN or facility_admin
-            if (in_array($user->user_role?->roleName, ['SUPER_ADMIN', 'FACILITY_ADMIN'])) {
+            if (in_array($user->user_role?->roleName, ['HOSPITAL_ADMIN', 'NICRAT_STAFF'])) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'You cannot delete super admin or facility admin users',
+                    'message' => 'You cannot delete hospital administrators or NICRAT staff',
                 ], 403);
             }
+        } 
+        else {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to delete users',
+            ], 403);
+            }
+
+        // Prevent self-deletion
+        if ($user->id === $currentUser->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You cannot delete your own account',
+            ], 403);
         }
 
         $user->delete();
@@ -376,15 +523,13 @@ class UserController extends Controller
     public function roles(): JsonResponse
     {
         $currentUser = Auth::user();
+        $currentUserRole = $currentUser->user_role?->roleName;
 
-        if ($currentUser->user_role?->roleName === 'SUPER_ADMIN') {
-            // Super admin can only see facility_admin role when creating users
-            $roles = Role::where('roleName', 'FACILITY_ADMIN')->get();
-        } elseif ($currentUser->user_role?->roleName === 'FACILITY_ADMIN') {
-            // Facility admin sees all roles except SUPER_ADMIN and facility_admin
-            $roles = Role::whereNotIn('roleName', ['SUPER_ADMIN', 'FACILITY_ADMIN'])->get();
+        if ($currentUserRole === 'SUPER_ADMIN') {
+            $roles = Role::whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN'])->get();
+        } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+            $roles = Role::where('roleName', 'DATA_CLERK')->get();
         } else {
-            // Other users cannot create users, return empty
             $roles = [];
         }
 
@@ -400,20 +545,18 @@ class UserController extends Controller
     public function facilities(): JsonResponse
     {
         $currentUser = Auth::user();
+        $currentUserRole = $currentUser->user_role?->roleName;
 
-        if ($currentUser->role === 'SUPER_ADMIN') {
-            // Super admin sees all active facilities
+        if ($currentUserRole === 'SUPER_ADMIN') {
             $facilities = Facility::where('status', 'active')
                 ->select('facilityId', 'facilityName', 'facilityCode')
                 ->get();
-        } elseif ($currentUser->role === 'facility_admin') {
-            // Facility admin only sees their own facility
+        } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
             $facilities = Facility::where('facilityId', $currentUser->facilityId)
                 ->where('status', 'active')
                 ->select('facilityId', 'facilityName', 'facilityCode')
                 ->get();
         } else {
-            // Other users cannot create users, return empty
             $facilities = [];
         }
 

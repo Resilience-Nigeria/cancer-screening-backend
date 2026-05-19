@@ -31,7 +31,7 @@ class User extends Authenticatable implements JWTSubject
 
     public function facility(): BelongsTo
     {
-        return $this->belongsTo(Facility::class, 'facilityId');
+        return $this->belongsTo(Facility::class, 'facilityId', 'facilityId');
     }
 
     public function user_role(): BelongsTo
@@ -58,12 +58,91 @@ class User extends Authenticatable implements JWTSubject
     {
         return [
             'facilityId' => $this->facilityId,
-            'role' => $this->roleName,
+            'role' => $this->user_role?->roleName,
         ];
     }
 
+    /**
+     * Role Check Methods
+     */
     public function isSuperAdmin(): bool
     {
-        return $this->roleName === 'super_admin';
+        return $this->user_role?->roleName === 'SUPER_ADMIN';
+    }
+
+    public function isNicratStaff(): bool
+    {
+        return $this->user_role?->roleName === 'NICRAT_STAFF';
+    }
+
+    public function isHospitalAdmin(): bool
+    {
+        return $this->user_role?->roleName === 'HOSPITAL_ADMIN';
+    }
+
+    public function isDataClerk(): bool
+    {
+        return $this->user_role?->roleName === 'DATA_CLERK';
+    }
+
+    /**
+     * Check if user has national-level access (can see all facilities)
+     */
+    public function hasNationalAccess(): bool
+    {
+        $roleName = $this->user_role?->roleName;
+        return in_array($roleName, ['SUPER_ADMIN', 'NICRAT_STAFF']);
+    }
+
+    /**
+     * Check if user has facility-level access (can only see their facility)
+     */
+    public function hasFacilityAccess(): bool
+    {
+        $roleName = $this->user_role?->roleName;
+        return in_array($roleName, ['HOSPITAL_ADMIN', 'DATA_CLERK']);
+    }
+
+    /**
+     * Check if user can create other users
+     */
+    public function canCreateUsers(): bool
+    {
+        $roleName = $this->user_role?->roleName;
+        return in_array($roleName, ['SUPER_ADMIN', 'HOSPITAL_ADMIN']);
+    }
+
+    /**
+     * Get roles this user can create
+     * SUPER_ADMIN can create: NICRAT_STAFF, HOSPITAL_ADMIN
+     * HOSPITAL_ADMIN can create: DATA_CLERK (nurses, doctors, staff)
+     */
+    public function getRolesCanCreate(): array
+    {
+        if ($this->isSuperAdmin()) {
+            return Role::whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN'])->get()->toArray();
+        }
+
+        if ($this->isHospitalAdmin()) {
+            return Role::where('roleName', 'DATA_CLERK')->get()->toArray();
+        }
+
+        return [];
+    }
+
+    /**
+     * Scope: Filter by facility
+     */
+    public function scopeForFacility($query, $facilityId)
+    {
+        return $query->where('facilityId', $facilityId);
+    }
+
+    /**
+     * Scope: Active users only
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
     }
 }

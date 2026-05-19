@@ -52,7 +52,7 @@ class DashboardService
         $liverScreenings = DB::table('liver_screenings')->count();
 
         // Positive findings (confirmed cancer cases)
-        $positiveFindings = CaseOutcome::where('cancerConfirmed', true)
+        $positiveFindings = CaseOutcome::where('screeningResult', 'positive')
             ->count();
 
         return [
@@ -89,7 +89,7 @@ class DashboardService
             return [
                 'visitId' => $visit->visitId,
                 'clientName' => $visit->client->fullName ?? 'Unknown',
-                'screeningId' => $visit->client->screeningId ?? '—',
+                'clientId' => $visit->client->clientId ?? '—',
                 'screeningType' => $this->determineScreeningType($visit),
                 'status' => $this->determineVisitStatus($visit),
                 'facility' => $visit->client->facility->facilityName ?? '—',

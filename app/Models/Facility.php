@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Facility extends Model
 {
     use HasFactory;
-protected $primaryKey = 'facilityId';
+    
+    protected $primaryKey = 'facilityId';
+    
     protected $fillable = [
         'facilityName',
         'facilityCode',
@@ -19,10 +21,14 @@ protected $primaryKey = 'facilityId';
         'phoneNumber',
         'email',
         'status',
+        'isScreeningCenter',
+        'isTreatmentCenter',
     ];
 
     protected $casts = [
         'status' => 'string',
+        'isScreeningCenter' => 'boolean',
+        'isTreatmentCenter' => 'boolean',
     ];
 
     /**
@@ -33,8 +39,7 @@ protected $primaryKey = 'facilityId';
         return $this->hasMany(User::class, 'facilityId');
     }
 
-
-      public function clients(): HasMany
+    public function clients(): HasMany
     {
         return $this->hasMany(Client::class, 'facilityId');
     }
@@ -43,7 +48,6 @@ protected $primaryKey = 'facilityId';
     {
         return $this->hasMany(ScreeningVisit::class, 'facilityId');
     }
-
 
     /**
      * Get active users count
@@ -55,17 +59,42 @@ protected $primaryKey = 'facilityId';
 
     /**
      * Get total screenings count
-     * Adjust based on your actual screening relationship
      */
     public function getTotalScreeningsCountAttribute(): int
     {
-        // If you have a screenings relationship:
-        // return $this->screenings()->count();
-        
-        // Or if screenings are through visits:
         return \DB::table('screening_visits')
             ->whereIn('createdBy', $this->users()->pluck('id'))
             ->count();
+    }
+
+    /**
+     * Get facility types as readable string
+     */
+    public function getFacilityTypesAttribute(): string
+    {
+        if ($this->isScreeningCenter && $this->isTreatmentCenter) {
+            return 'Screening & Treatment Center';
+        } elseif ($this->isScreeningCenter) {
+            return 'Screening Center';
+        } elseif ($this->isTreatmentCenter) {
+            return 'Treatment Center';
+        }
+        return 'Not Specified';
+    }
+
+    /**
+     * Get facility types as array
+     */
+    public function getFacilityTypesArrayAttribute(): array
+    {
+        $types = [];
+        if ($this->isScreeningCenter) {
+            $types[] = 'Screening Center';
+        }
+        if ($this->isTreatmentCenter) {
+            $types[] = 'Treatment Center';
+        }
+        return $types;
     }
 
     /**
@@ -82,5 +111,30 @@ protected $primaryKey = 'facilityId';
     public function scopeInactive($query)
     {
         return $query->where('status', 'inactive');
+    }
+
+    /**
+     * Scope for screening centers
+     */
+    public function scopeScreeningCenters($query)
+    {
+        return $query->where('isScreeningCenter', true);
+    }
+
+    /**
+     * Scope for treatment centers
+     */
+    public function scopeTreatmentCenters($query)
+    {
+        return $query->where('isTreatmentCenter', true);
+    }
+
+    /**
+     * Scope for both screening and treatment centers
+     */
+    public function scopeBothTypes($query)
+    {
+        return $query->where('isScreeningCenter', true)
+                     ->where('isTreatmentCenter', true);
     }
 }

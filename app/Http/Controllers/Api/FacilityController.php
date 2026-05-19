@@ -37,6 +37,22 @@ class FacilityController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Filter by facility type
+        if ($request->has('facilityType') && $request->facilityType !== 'all') {
+            switch ($request->facilityType) {
+                case 'screening':
+                    $query->where('isScreeningCenter', true);
+                    break;
+                case 'treatment':
+                    $query->where('isTreatmentCenter', true);
+                    break;
+                case 'both':
+                    $query->where('isScreeningCenter', true)
+                          ->where('isTreatmentCenter', true);
+                    break;
+            }
+        }
+
         $facilities = $query->get()->map(function ($facility) {
             return [
                 'id' => $facility->facilityId,
@@ -48,6 +64,10 @@ class FacilityController extends Controller
                 'phoneNumber' => $facility->phoneNumber,
                 'email' => $facility->email,
                 'status' => $facility->status,
+                'isScreeningCenter' => $facility->isScreeningCenter,
+                'isTreatmentCenter' => $facility->isTreatmentCenter,
+                'facilityTypes' => $facility->facility_types,
+                'facilityTypesArray' => $facility->facility_types_array,
                 'activeUsers' => $facility->active_users_count,
                 'totalScreenings' => $facility->total_screenings_count,
                 'createdAt' => $facility->created_at,
@@ -61,6 +81,9 @@ class FacilityController extends Controller
             'active' => Facility::where('status', 'active')->count(),
             'inactive' => Facility::where('status', 'inactive')->count(),
             'totalUsers' => \DB::table('users')->whereIn('facilityId', Facility::pluck('facilityId'))->count(),
+            'screeningCenters' => Facility::where('isScreeningCenter', true)->count(),
+            'treatmentCenters' => Facility::where('isTreatmentCenter', true)->count(),
+            'bothTypes' => Facility::where('isScreeningCenter', true)->where('isTreatmentCenter', true)->count(),
         ];
 
         return response()->json([
@@ -87,6 +110,10 @@ class FacilityController extends Controller
                 'phoneNumber' => $facility->phoneNumber,
                 'email' => $facility->email,
                 'status' => $facility->status,
+                'isScreeningCenter' => $facility->isScreeningCenter,
+                'isTreatmentCenter' => $facility->isTreatmentCenter,
+                'facilityTypes' => $facility->facility_types,
+                'facilityTypesArray' => $facility->facility_types_array,
                 'activeUsers' => $facility->active_users_count,
                 'totalScreenings' => $facility->total_screenings_count,
                 'createdAt' => $facility->created_at,
@@ -109,6 +136,8 @@ class FacilityController extends Controller
             'phoneNumber' => 'required|string|max:20',
             'email' => 'required|email|max:255|unique:facilities,email',
             'status' => 'sometimes|in:active,inactive',
+            'isScreeningCenter' => 'sometimes|boolean',
+            'isTreatmentCenter' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -116,6 +145,17 @@ class FacilityController extends Controller
                 'status' => false,
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // Validate at least one type is selected
+        $isScreening = $request->input('isScreeningCenter', true);
+        $isTreatment = $request->input('isTreatmentCenter', false);
+        
+        if (!$isScreening && !$isTreatment) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Facility must be at least one type (Screening Center or Treatment Center)',
             ], 422);
         }
 
@@ -128,6 +168,8 @@ class FacilityController extends Controller
             'phoneNumber' => $request->phoneNumber,
             'email' => $request->email,
             'status' => $request->status ?? 'active',
+            'isScreeningCenter' => $isScreening,
+            'isTreatmentCenter' => $isTreatment,
         ]);
 
         return response()->json([
@@ -143,6 +185,9 @@ class FacilityController extends Controller
                 'phoneNumber' => $facility->phoneNumber,
                 'email' => $facility->email,
                 'status' => $facility->status,
+                'isScreeningCenter' => $facility->isScreeningCenter,
+                'isTreatmentCenter' => $facility->isTreatmentCenter,
+                'facilityTypes' => $facility->facility_types,
             ],
         ], 201);
     }
@@ -152,24 +197,39 @@ class FacilityController extends Controller
      */
     public function update(Request $request, Facility $facility): JsonResponse
     {
-        // $validator = Validator::make($request->all(), [
-        //     'facilityName' => 'sometimes|required|string|max:255',
-        //     'facilityCode' => 'sometimes|required|string|max:50|unique:facilities,facilityCode,' . $facility->facilityId,
-        //     'facilityState' => 'sometimes|required|string|max:100',
-        //     'facilityLga' => 'sometimes|required|string|max:100',
-        //     'facilityAddress' => 'sometimes|required|string',
-        //     'phoneNumber' => 'sometimes|required|string|max:20',
-        //     'email' => 'sometimes|required|email|max:255|unique:facilities,email,' . $facility->facilityId,
-        //     'status' => 'sometimes|in:active,inactive',
-        // ]);
+        $validator = Validator::make($request->all(), [
+            'facilityName' => 'sometimes|required|string|max:255',
+            'facilityCode' => 'sometimes|required|string|max:50|unique:facilities,facilityCode,' . $facility->facilityId . ',facilityId',
+            'facilityState' => 'sometimes|required|string|max:100',
+            'facilityLga' => 'sometimes|required|string|max:100',
+            'facilityAddress' => 'sometimes|required|string',
+            'phoneNumber' => 'sometimes|required|string|max:20',
+            'email' => 'sometimes|required|email|max:255|unique:facilities,email,' . $facility->facilityId . ',facilityId',
+            'status' => 'sometimes|in:active,inactive',
+            'isScreeningCenter' => 'sometimes|boolean',
+            'isTreatmentCenter' => 'sometimes|boolean',
+        ]);
 
-        // if ($validator->fails()) {
-        //     return response()->json([
-        //         'status' => false,
-        //         'message' => 'Validation failed',
-        //         'errors' => $validator->errors(),
-        //     ], 422);
-        // }
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // Validate at least one type is selected if types are being updated
+        if ($request->has('isScreeningCenter') || $request->has('isTreatmentCenter')) {
+            $isScreening = $request->input('isScreeningCenter', $facility->isScreeningCenter);
+            $isTreatment = $request->input('isTreatmentCenter', $facility->isTreatmentCenter);
+            
+            if (!$isScreening && !$isTreatment) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Facility must be at least one type (Screening Center or Treatment Center)',
+                ], 422);
+            }
+        }
 
         $facility->update($request->only([
             'facilityName',
@@ -180,6 +240,8 @@ class FacilityController extends Controller
             'phoneNumber',
             'email',
             'status',
+            'isScreeningCenter',
+            'isTreatmentCenter',
         ]));
 
         return response()->json([
@@ -195,6 +257,9 @@ class FacilityController extends Controller
                 'phoneNumber' => $facility->phoneNumber,
                 'email' => $facility->email,
                 'status' => $facility->status,
+                'isScreeningCenter' => $facility->isScreeningCenter,
+                'isTreatmentCenter' => $facility->isTreatmentCenter,
+                'facilityTypes' => $facility->facility_types,
             ],
         ]);
     }
