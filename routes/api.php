@@ -75,7 +75,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/visits', [ScreeningVisitController::class, 'index']);
 
     // routes/api.php
-Route::get('/dashboard/screenings', [DashboardController::class, 'allScreenings']);
+    Route::get('/dashboard/screenings', [DashboardController::class, 'allScreenings']);
 
 
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
@@ -107,5 +107,13 @@ Route::get('/dashboard/screenings', [DashboardController::class, 'allScreenings'
     Route::post('/users', [UserController::class, 'store']);
     Route::put('/users/{user}', [UserController::class, 'update']);
     Route::delete('/users/{user}', [UserController::class, 'destroy']);
+
+
+    // Cancer Analytics Routes
+
+    Route::get('/analytics/cancer-by-age', [App\Http\Controllers\CancerAnalyticsController::class, 'getCancerByAgeClassification']);
+    Route::get('/analytics/cancer-type-age-distribution/{cancerType}', [App\Http\Controllers\CancerAnalyticsController::class, 'getCancerTypeAgeDistribution']);
+    Route::get('/analytics/gender-age-comparison', [App\Http\Controllers\CancerAnalyticsController::class, 'getGenderAgeComparison']);
+
 
 });

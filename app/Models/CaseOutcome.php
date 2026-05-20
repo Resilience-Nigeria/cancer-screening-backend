@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CaseOutcome extends Model
 {
     protected $table = 'case_outcomes';
-    
+    protected $primaryKey = 'outcomeId';
     protected $fillable = [
         'clientId',
         
