@@ -16,7 +16,7 @@ class StoreProstateScreeningRequest extends FormRequest
         return [
             // Screening Details
             'psaLevel' => ['nullable', 'numeric', 'min:0', 'max:1000'],
-            'dreResult' => ['nullable', 'in:normal,abnormal,suspicious'],
+            'dreResult' => ['nullable', 'in:normal,abnormal,suspicious,positive,negative'],
             'ipssScore' => ['nullable', 'integer', 'min:0', 'max:35'],
             'referral' => ['nullable', 'in:referred,not_referred'],
             
