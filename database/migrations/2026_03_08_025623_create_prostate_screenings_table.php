@@ -28,6 +28,8 @@ return new class extends Migration {
                 $table->enum('nocturia', ['yes', 'no'])->nullable();
                 $table->enum('incompleteEmptying', ['yes', 'no'])->nullable();
                 $table->enum('bloodInUrine', ['yes', 'no'])->nullable();
+                $table->enum('hematuria', ['yes', 'no'])->nullable();
+                $table->string('hematuriaType')->nullable();
                 $table->enum('referral', ['referred', 'not_referred'])->nullable();
 
             $table->date('screeningDate')->nullable();

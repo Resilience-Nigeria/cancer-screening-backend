@@ -18,6 +18,7 @@ class StoreClientRequest extends FormRequest
             'gender' => ['required', 'in:male,female'],
             'dateOfBirth' => ['required', 'date', 'before_or_equal:today'],
             'phoneNumber' => ['required', 'string', 'max:30'],
+            'nin' => ['nullable', 'string', 'max:30'],
             'screeningCategory' => ['required', 'in:new_client,follow_up'],
             'stateOfOrigin' => ['required', 'string', 'max:255'],
             'lgaOfOrigin' => ['required', 'string', 'max:255'],

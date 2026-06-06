@@ -26,7 +26,8 @@ class UpdateClientRequest extends FormRequest
         // ];
 
         return [
-             'fullName' => ['sometimes', 'required', 'string', 'max:255'],
+            'fullName' => ['sometimes', 'required', 'string', 'max:255'],
+            'nin' => ['nullable', 'string', 'max:255'],
             'gender' => ['sometimes', 'required', 'in:male,female'],
             'dateOfBirth' => ['sometimes', 'required', 'date', 'before_or_equal:today'],
             'phoneNumber' => ['nullable', 'string', 'max:30'],

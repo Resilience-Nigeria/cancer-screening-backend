@@ -12,27 +12,49 @@ class BreastScreening extends Model
     protected $primaryKey = 'screeningId';
 
     protected $fillable = [
+        'clientId',
         'visitId',
         'method',
         'screeningDate',
         'screeningResult',
-        'hpvResult',
-        'hpvGenotype',
-        'colposcopyDone',
+
+        // Imaging findings
+        'biradsScore',
+        'breastDensity',
+
+        // Breast health history & symptoms
+        'breastfeedingHistory',
+        'breastfeedingDuration',
+        'breastLumps',
+        'breastNippleDischarge',
+        'dischargeType',
+        'skinChanges',
+        'breastPain',
+        'previousBreastSurgery',
+        'previousBiopsy',
+        'ageAtFirstMenstruation',
+        'ageAtMenopause',
+
+        // Procedures & follow-up
         'biopsyDone',
-        'histologyResult',
-        'treatmentProvided',
+        'biopsyResult',
+        'referralCompleted',
         'treatmentReferral',
+
+        'remarks',
     ];
 
     protected $casts = [
         'screeningDate' => 'date',
         'biopsyDone' => 'boolean',
-        'treatmentProvided' => 'boolean',
+        'referralCompleted' => 'boolean',
+        'breastfeedingDuration' => 'integer',
+        'ageAtFirstMenstruation' => 'integer',
+        'ageAtMenopause' => 'integer',
     ];
 
     public function visit(): BelongsTo
     {
-        return $this->belongsTo(ScreeningVisit::class, 'visitId');
+        return $this->belongsTo(ScreeningVisit::class, 'visitId', 'visitId');
     }
 }

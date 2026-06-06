@@ -14,6 +14,7 @@ return new class extends Migration {
             $table->date('visitDate');
             $table->enum('visitType', ['initial', 'follow_up'])->default('initial');
             $table->text('notes')->nullable();
+            $table->boolean('treatmentReferral')->nullable();
             $table->unsignedBigInteger('createdBy')->nullable();
             $table->timestamps();
             $table->string('remarks')->nullable();

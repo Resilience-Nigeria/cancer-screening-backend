@@ -10,7 +10,9 @@ class CervicalScreening extends Model
     protected $table = 'cervical_screenings';
 
     protected $primaryKey = 'screeningId';
+
     protected $fillable = [
+        'clientId',
         'visitId',
         'method',
         'screeningDate',
@@ -20,16 +22,23 @@ class CervicalScreening extends Model
         'colposcopyDone',
         'biopsyDone',
         'biopsyResult',
-        'treatmentProvided',
-        'referralCompleted',
+        'treatmentReferral',
+
+        // Cervical-specific risk factors
+        'moreThanOnePartner',
+        'ageAtFirstIntercourse',
+        'numberOfChildbirths',
+        'contraceptiveUse',
+
+        'remarks',
     ];
 
     protected $casts = [
         'screeningDate' => 'date',
         'colposcopyDone' => 'boolean',
         'biopsyDone' => 'boolean',
-        'treatmentProvided' => 'boolean',
-        'referralCompleted' => 'boolean',
+        'ageAtFirstIntercourse' => 'integer',
+        'numberOfChildbirths' => 'integer',
     ];
 
     public function visit(): BelongsTo

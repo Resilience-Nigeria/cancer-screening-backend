@@ -28,11 +28,12 @@ protected $keyType = 'string';
         'screeningCategory',
         'stateOfOrigin',
         'lgaOfOrigin',
-        'stateOResidence',
+        'stateOfResidence',
         'lgaOfResidence',
         'address',
         'landmark',
         'registrationDate',
+        'nin'
     ];
 
     protected $casts = [

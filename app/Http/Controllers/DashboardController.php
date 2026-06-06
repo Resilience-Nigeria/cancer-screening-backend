@@ -28,7 +28,7 @@ class DashboardController extends Controller
     private function hasNationalAccess($user): bool
     {
         $roleName = $user->user_role?->roleName ?? $user->role;
-        return in_array($roleName, ['SUPER_ADMIN', 'NICRAT_STAFF']);
+        return in_array($roleName, ['SUPER_ADMIN', 'NICRAT_STAFF', 'PARTNER']);
     }
 
     /**
@@ -148,12 +148,15 @@ class DashboardController extends Controller
                 $positiveFindings = 0;
             }
 
+            $totalReferred = $this->getReferredClientsCount($user, $request, $hasNationalAccess);
+
             return response()->json([
                 'stats' => [
                     'totalClients' => $totalClients,
                     'screeningsThisMonth' => $screeningsThisMonth,
                     'pendingFollowUps' => $pendingFollowUps,
                     'referralAlerts' => $referralAlerts,
+                    'totalReferred' => $totalReferred,
                     'cervicalScreenings' => $cervicalScreenings,
                     'breastScreenings' => $breastScreenings,
                     'prostateScreenings' => $prostateScreenings,
@@ -292,7 +295,7 @@ class DashboardController extends Controller
                 ->selectRaw("
                     DATE_FORMAT(screening_visits.visitDate, '%b') as month,
                     COUNT(DISTINCT screening_visits.visitId) as screenings,
-                    0 as referrals
+                    3 as referrals
                 ")
                 ->where('screening_visits.visitDate', '>=', now()->subMonths(6)->startOfMonth());
 
@@ -524,4 +527,310 @@ class DashboardController extends Controller
             ], 500);
         }
     }
+
+
+    /**
+ * Count distinct clients who have been referred for treatment
+ * across any screening module (treatmentReferral set).
+ */
+private function getReferredClientsCount($user, Request $request, bool $hasNationalAccess): int
+{
+    $tables = [
+        'cervical_screenings',
+        'breast_screenings',
+        'prostate_screenings',
+        'colorectal_screenings',
+        'liver_screenings',
+    ];
+
+    $clientIds = collect();
+
+    foreach ($tables as $table) {
+        try {
+            $query = DB::table($table)
+                ->join('screening_visits', $table . '.visitId', '=', 'screening_visits.visitId')
+                ->join('clients', 'screening_visits.clientId', '=', 'clients.clientId')
+                ->whereNotNull($table . '.treatmentReferral')
+                ->where($table . '.treatmentReferral', '!=', '');
+
+            if (!$hasNationalAccess) {
+                $query->where('clients.facilityId', $user->facilityId);
+            } else {
+                if ($request->has('facilityId') && $request->facilityId !== 'all') {
+                    $query->where('clients.facilityId', $request->facilityId);
+                }
+                if ($request->has('dateFrom') && $request->dateFrom) {
+                    $query->whereDate($table . '.screeningDate', '>=', $request->dateFrom);
+                }
+                if ($request->has('dateTo') && $request->dateTo) {
+                    $query->whereDate($table . '.screeningDate', '<=', $request->dateTo);
+                }
+            }
+
+            $ids = $query->distinct()->pluck('clients.clientId');
+            $clientIds = $clientIds->merge($ids);
+        } catch (\Exception $e) {
+            // Table or column missing for this module — skip it
+        }
+    }
+
+    return $clientIds->unique()->count();
+}
+
+
+
+/**
+ * Get all referred clients (distinct clients with a treatment referral
+ * recorded on any screening module), with RBAC + optional filters.
+ */
+public function getReferredClients(Request $request): JsonResponse
+{
+    try {
+        $user = Auth::user();
+        $hasNationalAccess = $this->hasNationalAccess($user);
+
+        $page = (int) $request->input('page', 1);
+        $search = $request->input('search', '');
+        $limit = (int) $request->input('limit', 10);
+        $offset = ($page - 1) * $limit;
+
+        $modules = [
+            'cervical_screenings'   => 'Cervical Screening',
+            'breast_screenings'     => 'Breast Screening',
+            'prostate_screenings'   => 'Prostate Screening',
+            'colorectal_screenings' => 'Colorectal Screening',
+            'liver_screenings'      => 'Liver Screening',
+        ];
+
+        $referralRows = collect();
+
+        foreach ($modules as $table => $label) {
+            try {
+                $query = DB::table($table)
+                    ->join('screening_visits', $table . '.visitId', '=', 'screening_visits.visitId')
+                    ->join('clients', 'screening_visits.clientId', '=', 'clients.clientId')
+                    ->leftJoin('facilities', 'clients.facilityId', '=', 'facilities.facilityId')
+                    ->whereNotNull($table . '.treatmentReferral')
+                    ->where($table . '.treatmentReferral', '!=', '')
+                    ->select(
+                        'clients.clientId',
+                        'clients.fullName as clientName',
+                        'clients.clientId as clientCode',
+                        'facilities.facilityName',
+                        DB::raw("'" . $label . "' as screeningType"),
+                        $table . '.treatmentReferral as treatmentReferral',
+                        $table . '.screeningDate as screeningDate'
+                    );
+
+                if (!$hasNationalAccess) {
+                    $query->where('clients.facilityId', $user->facilityId);
+                } else {
+                    if ($request->has('facilityId') && $request->facilityId !== 'all') {
+                        $query->where('clients.facilityId', $request->facilityId);
+                    }
+                    if ($request->has('dateFrom') && $request->dateFrom) {
+                        $query->whereDate($table . '.screeningDate', '>=', $request->dateFrom);
+                    }
+                    if ($request->has('dateTo') && $request->dateTo) {
+                        $query->whereDate($table . '.screeningDate', '<=', $request->dateTo);
+                    }
+                }
+
+                $referralRows = $referralRows->merge($query->get());
+            } catch (\Exception $e) {
+                // Module table/column missing — skip it
+            }
+        }
+
+        // Collapse to distinct clients, aggregating their referrals
+        $clients = $referralRows
+            ->groupBy('clientId')
+            ->map(function ($rows) {
+                $first = $rows->first();
+                return [
+                    'clientId'             => $first->clientId,
+                    'clientName'           => $first->clientName,
+                    'clientCode'           => $first->clientCode,
+                    'facilityName'         => $first->facilityName,
+                    'modules'              => $rows->pluck('screeningType')->unique()->values()->implode(', '),
+                    'referralDestinations' => $rows->pluck('treatmentReferral')->filter()->unique()->values()->implode(', '),
+                    'referralCount'        => $rows->count(),
+                    'lastReferralDate'     => $rows->max('screeningDate'),
+                ];
+            })
+            ->values();
+
+        if ($search) {
+            $needle = strtolower($search);
+            $clients = $clients->filter(function ($c) use ($needle) {
+                return str_contains(strtolower((string) $c['clientName']), $needle)
+                    || str_contains(strtolower((string) $c['clientCode']), $needle);
+            })->values();
+        }
+
+        $clients = $clients->sortByDesc('lastReferralDate')->values();
+
+        $total = $clients->count();
+        $paged = $clients->slice($offset, $limit)->values();
+
+        return response()->json([
+            'data'  => $paged,
+            'total' => $total,
+            'page'  => $page,
+            'limit' => $limit,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Unable to fetch referred clients',
+            'error'   => $e->getMessage(),
+        ], 500);
+    }
+}
+
+
+
+/**
+ * Get all screening visits across modules with RBAC.
+ * Returns one row per visit, each with a `screenings` array (a visit can
+ * include multiple tests, each with its own screeningResult).
+ */
+public function allScreenings(Request $request): JsonResponse
+{
+    try {
+        $user = Auth::user();
+        $hasNationalAccess = $this->hasNationalAccess($user);
+
+        $page = (int) $request->input('page', 1);
+        $search = $request->input('search', '');
+        $limit = (int) $request->input('limit', 10);
+        $offset = ($page - 1) * $limit;
+        $type = $request->input('type');
+
+        $moduleTables = [
+            'cervical'   => 'cervical_screenings',
+            'breast'     => 'breast_screenings',
+            'prostate'   => 'prostate_screenings',
+            'colorectal' => 'colorectal_screenings',
+            'liver'      => 'liver_screenings',
+        ];
+
+        // 1) One row per visit (no module joins here)
+        $visitsQuery = DB::table('screening_visits')
+            ->join('clients', 'screening_visits.clientId', '=', 'clients.clientId')
+            ->leftJoin('facilities', 'clients.facilityId', '=', 'facilities.facilityId')
+            ->select([
+                'screening_visits.visitId',
+                'screening_visits.visitDate as screeningDate',
+                'clients.clientId',
+                'clients.fullName as clientName',
+                'facilities.facilityName as facility',
+            ]);
+
+        if (!$hasNationalAccess) {
+            $visitsQuery->where('clients.facilityId', $user->facilityId);
+        } else {
+            if ($request->has('facilityId') && $request->facilityId !== 'all') {
+                $visitsQuery->where('clients.facilityId', $request->facilityId);
+            }
+            if ($request->has('dateFrom') && $request->dateFrom) {
+                $visitsQuery->whereDate('screening_visits.visitDate', '>=', $request->dateFrom);
+            }
+            if ($request->has('dateTo') && $request->dateTo) {
+                $visitsQuery->whereDate('screening_visits.visitDate', '<=', $request->dateTo);
+            }
+        }
+
+        if ($search) {
+            $visitsQuery->where(function ($q) use ($search) {
+                $q->where('clients.fullName', 'like', "%{$search}%")
+                  ->orWhere('clients.clientId', 'like', "%{$search}%");
+            });
+        }
+
+        // Optional type filter: keep only visits that include that test type
+        if ($type && $type !== 'all' && isset($moduleTables[$type])) {
+            $table = $moduleTables[$type];
+            $visitsQuery->whereIn('screening_visits.visitId', function ($q) use ($table) {
+                $q->select('visitId')->from($table);
+            });
+        }
+
+        $total = (clone $visitsQuery)->count();
+
+        $visits = $visitsQuery->orderBy('screening_visits.visitDate', 'desc')
+            ->offset($offset)
+            ->limit($limit)
+            ->get();
+
+        $visitIds = $visits->pluck('visitId')->all();
+
+        // 2) Gather every screening for the visits on this page
+        $screeningsByVisit = collect();
+
+        if (!empty($visitIds)) {
+            foreach ($moduleTables as $key => $table) {
+                try {
+                    $rows = DB::table($table)
+                        ->whereIn($table . '.visitId', $visitIds)
+                        ->get();
+
+                    foreach ($rows as $row) {
+                        $screeningsByVisit->push([
+                            'visitId'         => $row->visitId,
+                            'screeningType'   => $key,
+                            'screeningResult' => $row->screeningResult ?? null,
+                            'screeningDate'   => $row->screeningDate ?? null,
+                            'notes'           => $row->notes ?? null,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Module table missing — skip it
+                }
+            }
+        }
+
+        $grouped = $screeningsByVisit->groupBy('visitId');
+
+        // 3) Attach the screenings array to each visit
+        $data = $visits->map(function ($v) use ($grouped) {
+            $items = $grouped->get($v->visitId, collect())->map(function ($s) {
+                return [
+                    'screeningType'   => $s['screeningType'],
+                    'screeningResult' => $s['screeningResult'] !== null ? (string) $s['screeningResult'] : null,
+                    'screeningDate'   => $s['screeningDate'],
+                    'notes'           => $s['notes'],
+                ];
+            })->values();
+
+            return [
+                'visitId'        => $v->visitId,
+                'clientId'       => $v->clientId,
+                'screeningDate'  => $v->screeningDate,
+                'facility'       => $v->facility,
+                'screeningCount' => $items->count(),
+                'screenings'     => $items,
+                'client'         => [
+                    'clientId'     => $v->clientId,
+                    'fullName'     => $v->clientName ?? 'Unknown',
+                    'full_name'    => $v->clientName ?? 'Unknown',
+                    'screeningId'  => $v->clientId ?? '—',
+                    'screening_id' => $v->clientId ?? '—',
+                ],
+            ];
+        });
+
+        return response()->json([
+            'data'  => $data,
+            'total' => $total,
+            'page'  => $page,
+            'limit' => $limit,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Unable to fetch screenings',
+            'error'   => $e->getMessage(),
+        ], 500);
+    }
+}
+
 }

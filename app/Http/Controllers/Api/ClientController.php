@@ -168,6 +168,6 @@ class ClientController extends Controller
         }
         
         // Return formatted client ID: UCTH-PLA-JNO-000001
-        return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string) $nextNumber, 10, '0', STR_PAD_LEFT);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Facility;
+use App\Models\Organization;
 use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -39,7 +40,7 @@ class UserController extends Controller
             Mail::send('emails.welcome', [
                 'user' => $user,
                 'password' => $plainPassword,
-                'loginUrl' => config('app.frontend_url') . '/login',
+                'loginUrl' => config('app.frontend_url') . '/',
             ], function ($message) use ($user) {
                 $message->to($user->email, $user->firstName . ' ' . $user->lastName)
                         ->subject('Welcome to NCSR - Your Account Details');
@@ -249,7 +250,7 @@ class UserController extends Controller
             'alternatePhoneNumber' => 'nullable|string|max:20',
             // Password field removed - will be auto-generated
             'role' => 'required|string|exists:roles,roleId',
-            'facilityId' => 'required|exists:facilities,facilityId',
+            'facilityId' => 'nullable|exists:facilities,facilityId',
             'status' => 'sometimes|in:active,inactive',
         ]);
 
@@ -276,12 +277,12 @@ class UserController extends Controller
 
         // Role-based validation
         if ($currentUserRole === 'SUPER_ADMIN') {
-            $allowedRoles = ['NICRAT_STAFF', 'HOSPITAL_ADMIN'];
+            $allowedRoles = ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'PARTNER'];
             
             if (!in_array($roleBeingAssigned->roleName, $allowedRoles)) {
                 return response()->json([
                     'status' => false,
-                    'message' => 'Super admin can only create NICRAT Staff and Hospital Administrators',
+                    'message' => 'Super admin can only create NICRAT Staff, Partners and Hospital Administrators',
                 ], 403);
             }
 
@@ -526,7 +527,7 @@ class UserController extends Controller
         $currentUserRole = $currentUser->user_role?->roleName;
 
         if ($currentUserRole === 'SUPER_ADMIN') {
-            $roles = Role::whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN'])->get();
+            $roles = Role::whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'PARTNER'])->get();
         } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
             $roles = Role::where('roleName', 'DATA_CLERK')->get();
         } else {
@@ -565,4 +566,30 @@ class UserController extends Controller
             'facilities' => $facilities,
         ]);
     }
+
+
+    /**
+ * Get all organizations for partner role
+ */
+public function getOrganizations()
+{
+    try {
+        $organizations = Organization::where('status', true)
+            ->select('id', 'organizationName', 'organizationCode', 'contactEmail')
+            ->orderBy('organizationName')
+            ->get();
+
+        return response()->json([
+            'status' => true,
+            'organizations' => $organizations,
+            'message' => 'Organizations fetched successfully'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => false,
+            'message' => 'Failed to fetch organizations'
+        ], 500);
+    }
+}
 }

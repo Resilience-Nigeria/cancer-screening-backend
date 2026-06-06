@@ -19,6 +19,7 @@ class ColorectalScreeningController extends Controller
             [
                 ...$request->validated(),
                 'visitId' => $visit->visitId,
+                'clientId' => $visit->clientId,
             ]
         );
 

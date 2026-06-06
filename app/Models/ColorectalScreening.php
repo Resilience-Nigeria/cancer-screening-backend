@@ -17,14 +17,16 @@ class ColorectalScreening extends Model
         'screeningResult',
         'polypDetected',
         'histologyResult',
+        // 'treatmentReferral',
+        // 'treatmentProvided',
         'treatmentReferral',
-        'treatmentProvided',
+        'clientId'
     ];
 
     protected $casts = [
         'screeningDate' => 'date',
         'polypDetected' => 'boolean',
-        'treatmentProvided' => 'boolean',
+        // 'treatmentProvided' => 'boolean',
     ];
 
     public function visit(): BelongsTo

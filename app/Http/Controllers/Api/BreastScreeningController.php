@@ -19,6 +19,7 @@ class BreastScreeningController extends Controller
             [
                 ...$request->validated(),
                 'visitId' => $visit->visitId,
+                'clientId' => $visit->clientId,
             ]
         );
 

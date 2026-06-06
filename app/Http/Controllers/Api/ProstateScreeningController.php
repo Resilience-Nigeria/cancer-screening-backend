@@ -19,25 +19,23 @@ class ProstateScreeningController extends Controller
 
         $validated = $request->validated();
 
-        // Handle numeric conversions
+        // Numeric conversions
         if (isset($validated['psaLevel']) && $validated['psaLevel'] !== null) {
             $validated['psaLevel'] = (float) $validated['psaLevel'];
         }
-        
         if (isset($validated['ipssScore']) && $validated['ipssScore'] !== null) {
             $validated['ipssScore'] = (int) $validated['ipssScore'];
         }
 
         // Convert empty strings to null
-        $validated = array_map(function ($value) {
-            return $value === '' ? null : $value;
-        }, $validated);
+        $validated = array_map(fn ($value) => $value === '' ? null : $value, $validated);
 
         $screening = ProstateScreening::updateOrCreate(
             ['visitId' => $visit->visitId],
             [
                 ...$validated,
                 'visitId' => $visit->visitId,
+                'clientId' => $visit->clientId,
             ]
         );
 
@@ -67,10 +65,16 @@ class ProstateScreeningController extends Controller
     protected function formatScreening(ProstateScreening $screening): array
     {
         return [
-            // CamelCase for frontend
+            'screeningId' => $screening->screeningId,
+            'visitId' => $screening->visitId,
+            'clientId' => $screening->clientId,
+            'screeningDate' => optional($screening->screeningDate)->toDateString(),
+            'screeningResult' => $screening->screeningResult,
+
             'psaLevel' => $screening->psaLevel,
             'dreResult' => $screening->dreResult,
             'ipssScore' => $screening->ipssScore,
+
             'poorUrinaryStream' => $screening->poorUrinaryStream,
             'urgeIncontinence' => $screening->urgeIncontinence,
             'delayStartingUrination' => $screening->delayStartingUrination,
@@ -80,24 +84,11 @@ class ProstateScreeningController extends Controller
             'nocturia' => $screening->nocturia,
             'incompleteEmptying' => $screening->incompleteEmptying,
             'bloodInUrine' => $screening->bloodInUrine,
+
             'biopsyDone' => (bool) $screening->biopsyDone,
             'gleasonScore' => $screening->gleasonScore,
-            'referral' => $screening->referral,
-            
-            // Snake_case for backward compatibility
-            'psa_level' => $screening->psaLevel,
-            'dre_result' => $screening->dreResult,
-            'ipss_score' => $screening->ipssScore,
-            'poor_urinary_stream' => $screening->poorUrinaryStream,
-            'urge_incontinence' => $screening->urgeIncontinence,
-            'delay_starting_urination' => $screening->delayStartingUrination,
-            'inability_to_hold_urine' => $screening->inabilityToHoldUrine,
-            'terminal_dribbling' => $screening->terminalDribbling,
-            'frequent_day_urination' => $screening->frequentDayUrination,
-            'incomplete_emptying' => $screening->incompleteEmptying,
-            'blood_in_urine' => $screening->bloodInUrine,
-            'biopsy_done' => (bool) $screening->biopsyDone,
-            'gleason_score' => $screening->gleasonScore,
+            'treatmentReferral' => $screening->treatmentReferral,
+            'remarks' => $screening->remarks,
         ];
     }
 

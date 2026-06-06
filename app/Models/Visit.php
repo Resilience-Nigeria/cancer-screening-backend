@@ -14,6 +14,7 @@ class Visit extends Model
         'visitDate',
         'visitType',
         'notes',
+        treatmentReferral,
     ];
 
     protected $casts = [

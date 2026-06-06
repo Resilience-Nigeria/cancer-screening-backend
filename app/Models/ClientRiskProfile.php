@@ -27,7 +27,7 @@ class ClientRiskProfile extends Model
     ];
 
     protected $casts = [
-        'familyHistory' => 'boolean',
+        // 'familyHistory' => 'boolean',
         'comorbiditiesJson' => 'array',
         'recordedAt' => 'datetime',
     ];

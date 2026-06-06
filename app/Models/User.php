@@ -22,6 +22,7 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'role',
         'status',
+        'organization_id',
     ];
 
     protected $hidden = [
@@ -33,6 +34,11 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->belongsTo(Facility::class, 'facilityId', 'facilityId');
     }
+
+    public function organization()  // ← Add this
+{
+    return $this->belongsTo(Organization::class, 'organization_id');
+}
 
     public function user_role(): BelongsTo
     {

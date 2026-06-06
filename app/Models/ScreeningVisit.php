@@ -18,6 +18,7 @@ class ScreeningVisit extends Model
         'visitType',
         'notes',
         'createdBy',
+        'treatmentReferral'
     ];
 
     protected $casts = [

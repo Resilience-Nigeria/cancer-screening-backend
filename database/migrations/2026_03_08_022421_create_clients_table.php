@@ -17,6 +17,7 @@ return new class extends Migration {
             $table->date('dateOfBirth');
             $table->string('age');
             $table->string('phoneNumber', 30)->nullable();
+            $table->string('nin');
             $table->enum('screeningCategory', ['new_client', 'follow_up'])->default('new_client');
             $table->string('stateOfOrigin')->nullable();
             $table->string('lgaOfOrigin')->nullable();

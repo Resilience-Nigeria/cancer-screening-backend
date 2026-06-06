@@ -11,12 +11,24 @@ class StoreScreeningVisitRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'treatmentReferral' => match ($this->treatmentReferral) {
+                'referred' => true,
+                'not_referred' => false,
+                default => null,
+            },
+        ]);
+    }
+
     public function rules(): array
     {
         return [
             'visitDate' => ['required', 'date'],
             'visitType' => ['required', 'in:initial,follow_up'],
             'notes' => ['nullable', 'string'],
+            'treatmentReferral' => ['nullable', 'boolean'],
         ];
     }
 }

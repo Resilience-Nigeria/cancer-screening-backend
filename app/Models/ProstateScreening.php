@@ -10,9 +10,10 @@ class ProstateScreening extends Model
     protected $table = 'prostate_screenings';
 
     protected $primaryKey = 'screeningId';
+
     protected $fillable = [
+        'clientId',
         'visitId',
-        'method',
         'screeningDate',
         'screeningResult',
         'psaLevel',
@@ -21,9 +22,8 @@ class ProstateScreening extends Model
         'biopsyDone',
         'gleasonScore',
         'treatmentReferral',
-        'treatmentProvided',
 
-        // Urinary Symptoms
+        // Urinary symptoms
         'poorUrinaryStream',
         'urgeIncontinence',
         'delayStartingUrination',
@@ -33,17 +33,18 @@ class ProstateScreening extends Model
         'nocturia',
         'incompleteEmptying',
         'bloodInUrine',
+
+        'remarks',
     ];
 
     protected $casts = [
         'screeningDate' => 'date',
         'biopsyDone' => 'boolean',
-        'treatmentProvided' => 'boolean',
+        'ipssScore' => 'integer',
     ];
-
 
     public function visit(): BelongsTo
     {
-        return $this->belongsTo(ScreeningVisit::class, 'visitId');
+        return $this->belongsTo(ScreeningVisit::class, 'visitId', 'visitId');
     }
 }

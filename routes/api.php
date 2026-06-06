@@ -42,6 +42,8 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
         ]);
     });
 
+    Route::get('/users/organizations', [UserController::class, 'getOrganizations']);
+    
     Route::get('/clients', [ClientController::class, 'index']);
     Route::post('/clients', [ClientController::class, 'store']);
     Route::get('/clients/{client}', [ClientController::class, 'show']);
@@ -83,6 +85,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/dashboard/monthly-trends', [DashboardController::class, 'getMonthlyTrends']);
 
     Route::get('/dashboard/referrals', [DashboardController::class, 'getReferrals']);
+    Route::get('/dashboard/referred-clients', [DashboardController::class, 'getReferredClients']);
         Route::get('/dashboard/screenings/{type}', [DashboardController::class, 'getScreeningsByType']);
         Route::get('/dashboard/positive-findings', [DashboardController::class, 'getPositiveFindings']);
 
