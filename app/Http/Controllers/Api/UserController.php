@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use App\Services\BrevoMailService;
 
 class UserController extends Controller
 {
@@ -34,22 +35,35 @@ class UserController extends Controller
     /**
      * Send welcome email with credentials
      */
-    private function sendWelcomeEmail(User $user, string $plainPassword): void
-    {
-        try {
-            Mail::send('emails.welcome', [
-                'user' => $user,
-                'password' => $plainPassword,
-                'loginUrl' => config('app.frontend_url') . '/',
-            ], function ($message) use ($user) {
-                $message->to($user->email, $user->firstName . ' ' . $user->lastName)
-                        ->subject('Welcome to NCSR - Your Account Details');
-            });
-        } catch (\Exception $e) {
-            // Log the error but don't fail the user creation
-            \Log::error('Failed to send welcome email: ' . $e->getMessage());
-        }
+    // private function sendWelcomeEmail(User $user, string $plainPassword): void
+    // {
+    //     try {
+    //         Mail::send('emails.welcome', [
+    //             'user' => $user,
+    //             'password' => $plainPassword,
+    //             'loginUrl' => config('app.frontend_url') . '/',
+    //         ], function ($message) use ($user) {
+    //             $message->to($user->email, $user->firstName . ' ' . $user->lastName)
+    //                     ->subject('Welcome to NCSR - Your Account Details');
+    //         });
+    //     } catch (\Exception $e) {
+    //         // Log the error but don't fail the user creation
+    //         \Log::error('Failed to send welcome email: ' . $e->getMessage());
+    //     }
+    // }
+
+
+   
+
+private function sendWelcomeEmail(User $user, string $plainPassword): void
+{
+    try {
+        app(BrevoMailService::class)
+            ->sendWelcomeEmail($user, $plainPassword);
+    } catch (\Exception $e) {
+        \Log::error('Failed to send welcome email: ' . $e->getMessage());
     }
+}
 
     /**
      * Get all users with filters (respects role hierarchy and hides super admins)
