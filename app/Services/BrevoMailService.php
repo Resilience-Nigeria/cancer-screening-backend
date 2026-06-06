@@ -2,47 +2,37 @@
 
 namespace App\Services;
 
-use Brevo\Client\Api\TransactionalEmailsApi;
-use Brevo\Client\Configuration;
-use GuzzleHttp\Client;
-use Brevo\Client\Model\SendSmtpEmail;
+use Illuminate\Support\Facades\Http;
 
 class BrevoMailService
 {
-    protected $apiInstance;
-
-    public function __construct()
+    public function sendWelcomeEmail($user, $password): void
     {
-        $config = Configuration::getDefaultConfiguration()
-            ->setApiKey('api-key', env('BREVO_API_KEY'));
-
-        $this->apiInstance = new TransactionalEmailsApi(
-            new Client(),
-            $config
-        );
-    }
-
-    public function sendWelcomeEmail($user, $password)
-    {
-        $email = new SendSmtpEmail([
-            'to' => [
-                [
-                    'email' => $user->email,
-                    'name' => $user->firstName . ' ' . $user->lastName
-                ]
+        $response = Http::withHeaders([
+            'api-key' => env('BREVO_API_KEY'),
+            'content-type' => 'application/json',
+        ])->post('https://api.brevo.com/v3/smtp/email', [
+            'to' => [[
+                'email' => $user->email,
+                'name' => $user->firstName . ' ' . $user->lastName
+            ]],
+            'sender' => [
+                'name' => env('MAIL_FROM_NAME', 'NCSR'),
+                'email' => env('MAIL_FROM_ADDRESS')
             ],
             'subject' => 'Welcome to NCSR - Your Account Details',
             'htmlContent' => view('emails.welcome', [
                 'user' => $user,
                 'password' => $password,
-                'loginUrl' => config('app.frontend_url') . '/'
+                'loginUrl' => config('app.frontend_url')
             ])->render(),
-            'sender' => [
-                'name' => config('app.name'),
-                'email' => env('MAIL_FROM_ADDRESS')
-            ]
         ]);
 
-        return $this->apiInstance->sendTransacEmail($email);
+        if (!$response->successful()) {
+            \Log::error('Brevo email failed', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+        }
     }
 }
