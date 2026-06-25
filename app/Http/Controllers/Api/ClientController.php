@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
+use App\Http\Requests\SearchClientRequest;
 use App\Models\Client;
 use App\Models\Facility;
 use App\Services\LgaCodeMapping;
@@ -170,4 +171,42 @@ class ClientController extends Controller
         // Return formatted client ID: UCTH-PLA-JNO-000001
         return $prefix . str_pad((string) $nextNumber, 10, '0', STR_PAD_LEFT);
     }
+
+
+
+    public function search(Request $request)
+{
+    $search = trim($request->search);
+
+    $client = Client::where('clientId', $search)
+        ->orWhere('phoneNumber', $search)
+        ->first();
+
+    if (!$client) {
+        return response()->json([
+            'message' => 'Client not found'
+        ]);
+    }
+
+    return response()->json([
+        'client' => $client
+    ]);
+}
+
+
+//  public function search(SearchClientRequest $request): JsonResponse
+//     {
+//         return $search = trim($request->search);
+//         $client = Client::where('clientId', $search)->firstOrFail();
+        
+//         $this->authorizeClient($client);
+
+//         $client->update($request->validated());
+
+//         return response()->json([
+//             'message' => 'Client found',
+//             'client' => $client,
+//         ]);
+//     }
+
 }

@@ -35,7 +35,7 @@ class StoreColorectalScreeningRequest extends FormRequest
             'clientId' => ['nullable', 'string'],
             'method' => ['required', 'in:fit,fobt,colonoscopy'],
             'screeningDate' => ['required', 'date'],
-            'screeningResult' => ['required', 'in:negative,positive,suspicious'],
+            'screeningResult' => ['required', 'in:negative,positive,suspicious,non_suspicious'],
             'polypDetected' => ['nullable', 'boolean'],
             'histologyResult' => ['nullable', 'in:negative,positive'],
             'treatmentReferral' => ['nullable', 'in:referred,not_referred'],

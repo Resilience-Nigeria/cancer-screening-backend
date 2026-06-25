@@ -24,6 +24,8 @@ class ClientRiskProfile extends Model
         'comorbiditiesJson',
         'recordedAt',
         'recordedBy',
+        'ageAtMenopause',
+        'ageAtFirstMenstruation',
     ];
 
     protected $casts = [

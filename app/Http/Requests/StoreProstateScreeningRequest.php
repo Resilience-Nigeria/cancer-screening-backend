@@ -35,7 +35,7 @@ class StoreProstateScreeningRequest extends FormRequest
             // Screening details
             'clientId' => ['nullable', 'string'],
             'screeningDate' => ['required', 'date'],
-            'screeningResult' => ['required', 'in:negative,positive,suspicious'],
+            'screeningResult' => ['required', 'in:negative,positive,suspicious,non_suspicious'],
             'psaLevel' => ['nullable', 'numeric', 'min:0', 'max:1000'],
             // Column is enum('positive','negative')
             'dreResult' => ['nullable', 'in:positive,negative'],

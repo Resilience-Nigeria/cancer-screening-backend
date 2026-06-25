@@ -48,6 +48,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::post('/clients', [ClientController::class, 'store']);
     Route::get('/clients/{client}', [ClientController::class, 'show']);
     Route::patch('/clients/{client}', [ClientController::class, 'update']);
+    Route::get('/clients/search/details', [ClientController::class, 'search']);
 
     Route::get('/clients/{client}/risk-profile', [RiskProfileController::class, 'show']);
     Route::post('/clients/{client}/risk-profile', [RiskProfileController::class, 'upsert']);

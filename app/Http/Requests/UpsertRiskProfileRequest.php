@@ -24,6 +24,8 @@ class UpsertRiskProfileRequest extends FormRequest
             'hcvStatus' => ['nullable', 'in:positive,negative,unknown'],
             'comorbiditiesJson' => ['nullable', 'array'],
             'comorbiditiesJson.*' => ['string'],
+            'ageAtFirstMenstruation' => ['string'],
+            'ageAtMenopause' => ['string'],
         ];
     }
 }

@@ -32,7 +32,7 @@ class StoreLiverScreeningRequest extends FormRequest
             'hcvStatus' => ['required', 'in:positive,negative'],
             'method' => ['required', 'in:uss,afp'],
             'screeningDate' => ['required', 'date'],
-            'screeningResult' => ['required', 'in:negative,positive,suspicious'],
+            'screeningResult' => ['required', 'in:negative,positive,suspicious,non_suspicious'],
             // Only sent when method = afp
             'afpValue' => ['nullable', 'numeric', 'min:0'],
             // Only sent when method = uss; defaults false in the DB

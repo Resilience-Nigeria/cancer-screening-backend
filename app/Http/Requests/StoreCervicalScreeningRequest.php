@@ -29,7 +29,7 @@ class StoreCervicalScreeningRequest extends FormRequest
             'clientId' => ['nullable', 'string'],
             'method' => ['required', 'in:via,pap,hpv'],
             'screeningDate' => ['required', 'date'],
-            'screeningResult' => ['required', 'in:negative,positive,suspicious'],
+            'screeningResult' => ['required', 'in:negative,positive,suspicious,non_suspicious'],
 
             'hpvResult' => ['nullable', 'string', 'max:255'],
             'hpvGenotype' => ['nullable', 'string', 'max:255'],
