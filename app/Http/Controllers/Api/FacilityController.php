@@ -56,6 +56,7 @@ class FacilityController extends Controller
         $facilities = $query->get()->map(function ($facility) {
             return [
                 'id' => $facility->facilityId,
+                'facilityId' => $facility->facilityId,
                 'facilityName' => $facility->facilityName,
                 'facilityCode' => $facility->facilityCode,
                 'facilityState' => $facility->facilityState,
