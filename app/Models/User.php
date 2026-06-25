@@ -91,6 +91,12 @@ class User extends Authenticatable implements JWTSubject
         return $this->user_role?->roleName === 'DATA_CLERK';
     }
 
+    public function isPartner(): bool
+    {
+        return $this->user_role?->roleName === 'PARTNER';
+    }
+
+   
     /**
      * Check if user has national-level access (can see all facilities)
      */
@@ -126,7 +132,7 @@ class User extends Authenticatable implements JWTSubject
     public function getRolesCanCreate(): array
     {
         if ($this->isSuperAdmin()) {
-            return Role::whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN'])->get()->toArray();
+            return Role::whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'PARTNER'])->get()->toArray();
         }
 
         if ($this->isHospitalAdmin()) {

@@ -42,7 +42,7 @@ class LiverScreeningController extends Controller
     {
         $user = auth('api')->user();
 
-        if (!$user->isSuperAdmin() && $visit->facilityId !== $user->facilityId) {
+        if (!$user->isSuperAdmin() || !$user->isPartner() && $visit->facilityId !== $user->facilityId) {
             abort(403, 'You cannot access this visit');
         }
     }
