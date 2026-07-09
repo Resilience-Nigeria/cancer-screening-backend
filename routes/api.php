@@ -14,6 +14,9 @@ use App\Http\Controllers\Api\OutcomeController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Api\FacilityController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\AwarenessRegistrationController;
+
+use App\Http\Controllers\Api\WhatsAppWebhookController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +30,12 @@ Route::prefix('auth')->group(function () {
     });
 });
 
+
+Route::post('/awareness/register', [AwarenessRegistrationController::class, 'store']);
+
+
+Route::match(['GET', 'POST'], '/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle']);
+
 Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/user', function () {
         $user = auth()->user();
@@ -39,8 +48,15 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
             'roleName' => $user->user_role?->roleName,
             'id' => $user->id,
             'message' => 'User authenticated successfully',
-        ]);
-    });
+            ]);
+        });
+            
+    Route::get('/awareness/registrations', [AwarenessRegistrationController::class, 'index']);
+    
+    // routes/api.php — inside auth:api middleware group
+Route::post('/clients/{client}/referrals', [ClientReferralController::class, 'store']);
+Route::get('/referrals', [ClientReferralController::class, 'index']);
+Route::patch('/referrals/{referral}/status', [ClientReferralController::class, 'updateStatus']);
 
     Route::get('/users/organizations', [UserController::class, 'getOrganizations']);
     
