@@ -89,6 +89,12 @@ public function store(StoreAwarenessRegistrationRequest $request): JsonResponse
         'phoneNumber'    => $request->phoneNumber,
         // Mask the number for display: 080****4875
         'maskedPhone'    => $this->maskPhone($request->phoneNumber),
+        'facility'       => $facility?->only([   // 👈 confirm this is still here
+        'facilityName',
+        'facilityAddress',
+        'navigatorName',
+        'navigatorPhone',
+    ]),
     ], 201);
 }
 
