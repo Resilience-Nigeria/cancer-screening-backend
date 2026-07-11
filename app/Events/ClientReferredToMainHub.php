@@ -1,5 +1,4 @@
 <?php
-// app/Events/ClientReferredToMainHub.php
 
 namespace App\Events;
 

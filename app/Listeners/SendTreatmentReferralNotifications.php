@@ -6,6 +6,7 @@ namespace App\Listeners;
 use App\Events\ClientReferredToTreatment;
 use App\Services\BrevoService;
 use App\Services\WhatsAppService;
+use Illuminate\Support\Facades\Log;  
 
 class SendTreatmentReferralNotifications
 {

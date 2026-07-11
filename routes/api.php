@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AwarenessRegistrationController;
 
 use App\Http\Controllers\Api\WhatsAppWebhookController;
+use App\Http\Controllers\Api\OtpController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +34,9 @@ Route::prefix('auth')->group(function () {
 
 Route::post('/awareness/register', [AwarenessRegistrationController::class, 'store']);
 
+Route::post('/otp/send',   [OtpController::class, 'send']);
+Route::post('/otp/verify', [OtpController::class, 'verify']);
+Route::post('/otp/resend', [OtpController::class, 'resend']);
 
 Route::match(['GET', 'POST'], '/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle']);
 

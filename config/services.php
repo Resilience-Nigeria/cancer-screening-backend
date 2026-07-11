@@ -41,4 +41,10 @@ return [
     'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
 ],
 
+'brevo' => [
+        'key'        => env('BREVO_API_KEY'),
+        'from_email' => env('BREVO_FROM_EMAIL', 'noreply@ncsr.gov.ng'),
+        'from_name'  => env('BREVO_FROM_NAME', 'NCSR — NICRAT'),
+    ],
+
 ];

@@ -23,34 +23,50 @@ class WhatsAppService
      * Send a plain-text WhatsApp message.
      */
     public function send(string $to, string $message): bool
-    {
-        $to = $this->normalizeNumber($to);
+{
+    $to = $this->normalizeNumber($to);
 
-        try {
-            $response = Http::withToken($this->apiToken)
-                ->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", [
-                    'messaging_product' => 'whatsapp',
-                    'to'                => $to,
-                    'type'              => 'text',
-                    'text'              => ['body' => $message],
-                ]);
+    Log::info('WhatsApp send attempt', [
+        'to'             => $to,
+        'phone_number_id'=> $this->phoneNumberId,
+        'api_url'        => $this->apiUrl,
+        'message_length' => strlen($message),
+    ]);
 
-            if (!$response->successful()) {
-                Log::warning('WhatsApp send failed', [
-                    'to'       => $to,
-                    'status'   => $response->status(),
-                    'body'     => $response->json(),
-                ]);
-                return false;
-            }
+    try {
+        $response = Http::withToken($this->apiToken)
+            ->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", [
+                'messaging_product' => 'whatsapp',
+                'to'                => $to,
+                'type'              => 'text',
+                'text'              => ['body' => $message],
+            ]);
 
-            return true;
-        } catch (\Throwable $e) {
-            Log::error('WhatsApp exception', ['to' => $to, 'error' => $e->getMessage()]);
+        Log::info('WhatsApp API response', [
+            'to'     => $to,
+            'status' => $response->status(),
+            'body'   => $response->json(),
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('WhatsApp send failed', [
+                'to'     => $to,
+                'status' => $response->status(),
+                'body'   => $response->json(),
+            ]);
             return false;
         }
-    }
 
+        return true;
+    } catch (\Throwable $e) {
+        Log::error('WhatsApp exception', [
+            'to'    => $to,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return false;
+    }
+}
     /**
      * Send a template message (for pre-approved WhatsApp templates).
      */

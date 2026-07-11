@@ -1,5 +1,5 @@
-// app/Events/ClientLinkedToScreeningCenter.php
 <?php
+// app/Events/ClientLinkedToScreeningCenter.php
 
 namespace App\Events;
 
@@ -12,7 +12,7 @@ class ClientLinkedToScreeningCenter
     use Dispatchable;
 
     public function __construct(
-        public Client $client,
-        public Facility $facility,
+        public readonly object $client,  // 👈 object instead of Client
+        public readonly Facility $facility,
     ) {}
 }

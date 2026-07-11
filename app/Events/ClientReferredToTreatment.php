@@ -1,5 +1,4 @@
 <?php
-// app/Events/ClientReferredToTreatment.php
 
 namespace App\Events;
 
