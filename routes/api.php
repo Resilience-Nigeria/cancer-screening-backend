@@ -31,6 +31,16 @@ Route::prefix('auth')->group(function () {
     });
 });
 
+// routes/api.php
+Route::get('/areas', function (\Illuminate\Http\Request $request) {
+    $areas = DB::table('areaCoordinates')
+        ->whereRaw('LOWER(state) = ?', [strtolower($request->state ?? '')])
+        ->whereRaw('LOWER(lga) = ?',   [strtolower($request->lga   ?? '')])
+        ->orderBy('area')
+        ->pluck('area');
+
+    return response()->json(['areas' => $areas]);
+});
 
 Route::post('/awareness/register', [AwarenessRegistrationController::class, 'store']);
 

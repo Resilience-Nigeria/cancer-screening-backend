@@ -18,6 +18,7 @@ class StoreAwarenessRegistrationRequest extends FormRequest
             'stateOfResidence' => ['required', 'string', 'max:100'],
             'lgaOfResidence'   => ['required', 'string', 'max:100'],
             'campaignSource'   => ['nullable', 'string', 'max:100'],
+            'areaOfResidence' => ['nullable', 'string', 'max:100'],
         ];
     }
 }

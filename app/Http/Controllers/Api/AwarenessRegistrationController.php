@@ -66,9 +66,10 @@ public function store(StoreAwarenessRegistrationRequest $request): JsonResponse
     $registration = AwarenessRegistration::create($request->validated());
 
     $facility = $this->facilityService->findNearestScreeningFacility(
-        $request->stateOfResidence,
-        $request->lgaOfResidence,
-    );
+    state: $request->stateOfResidence,
+    lga:   $request->lgaOfResidence,
+    area:  $request->areaOfResidence,  // 👈 new
+);
 
     $registration->update([
         'status'             => $facility ? 'linked' : 'pending',
