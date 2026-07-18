@@ -163,7 +163,7 @@ class ScreeningVisitController extends Controller
     {
         $user = auth('api')->user();
 
-        if (!$user->isSuperAdmin() || !$user->isPartner() && $client->facility_id !== $user->facility_id) {
+        if (!$user->isSuperAdmin() && !$user->isPartner() && $client->facility_id !== $user->facility_id) {
             abort(403, 'You cannot access this client');
         }
     }
@@ -172,7 +172,7 @@ class ScreeningVisitController extends Controller
     {
         $user = auth('api')->user();
 
-        if (!$user->isSuperAdmin() || !$user->isPartner() && $visit->facilityId !== $user->facilityId) {
+        if (!$user->isSuperAdmin() && !$user->isPartner() && $visit->facilityId !== $user->facilityId) {
             abort(403, 'You cannot access this visit');
         }
     }

@@ -26,6 +26,9 @@ class ClientRiskProfile extends Model
         'recordedBy',
         'ageAtMenopause',
         'ageAtFirstMenstruation',
+        'breastfeedingHistory',
+        'breastfeedingDuration',
+        'previousBreastSurgery',
     ];
 
     protected $casts = [

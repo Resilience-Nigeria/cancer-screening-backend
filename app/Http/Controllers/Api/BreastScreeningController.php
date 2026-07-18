@@ -14,10 +14,20 @@ class BreastScreeningController extends Controller
     {
         $this->authorizeVisit($visit);
 
+        $data = $request->validated();
+
+        // Automated clinical logic: a malignant histology outcome must
+        // always trigger an IHC prompt and the referral pathway — this
+        // isn't left to the clinician to remember to set separately.
+        if (($data['histologyResult'] ?? null) === 'malignant') {
+            $data['ihcRequested'] = true;
+            $data['treatmentReferral'] = 'referred';
+        }
+
         $screening = BreastScreening::updateOrCreate(
             ['visitId' => $visit->visitId],
             [
-                ...$request->validated(),
+                ...$data,
                 'visitId' => $visit->visitId,
                 'clientId' => $visit->clientId,
             ]

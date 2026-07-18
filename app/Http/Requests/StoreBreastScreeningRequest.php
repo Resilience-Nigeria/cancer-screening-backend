@@ -23,7 +23,7 @@ class StoreBreastScreeningRequest extends FormRequest
             $merge['method'] = 'uss';
         }
 
-        foreach (['biopsyDone', 'referralCompleted'] as $bool) {
+        foreach (['biopsyDone', 'referralCompleted', 'ihcRequested'] as $bool) {
             if ($this->has($bool) && is_string($this->input($bool))) {
                 $merge[$bool] = filter_var($this->input($bool), FILTER_VALIDATE_BOOLEAN);
             }
@@ -43,6 +43,14 @@ class StoreBreastScreeningRequest extends FormRequest
             // Imaging findings
             'biradsScore' => ['nullable', 'string', 'max:50'],
             'breastDensity' => ['nullable', 'string', 'max:100'],
+            'leftCbeFinding' => ['nullable', 'in:normal,suspicious'],
+            'rightCbeFinding' => ['nullable', 'in:normal,suspicious'],
+            'leftBiradsScore' => ['nullable', 'string', 'max:50'],
+            'rightBiradsScore' => ['nullable', 'string', 'max:50'],
+            'leftBreastDensity' => ['nullable', 'string', 'max:100'],
+            'rightBreastDensity' => ['nullable', 'string', 'max:100'],
+            'leftImagingFinding' => ['nullable', 'in:normal,suspicious'],
+            'rightImagingFinding' => ['nullable', 'in:normal,suspicious'],
 
             // Breast health history & symptoms
             'breastfeedingHistory' => ['nullable', 'in:yes,no'],
@@ -59,7 +67,15 @@ class StoreBreastScreeningRequest extends FormRequest
 
             // Procedures & follow-up
             'biopsyDone' => ['nullable', 'boolean'],
-            'biopsyResult' => ['nullable', 'required_if:biopsyDone,1,true', 'in:positive,negative'],
+            'biopsyBookingDate' => ['nullable', 'date'],
+            'biopsyBookingFacilityId' => ['nullable', 'integer', 'exists:facilities,facilityId'],
+            'biopsyBookingNotes' => ['nullable', 'string'],
+            // No longer required_if(biopsyDone) — a biopsy can be booked or
+            // performed with the result still pending (histology takes time).
+            'biopsyResult' => ['nullable', 'in:positive,negative'],
+            'histologyResult' => ['nullable', 'in:malignant,benign,positive,negative'],
+            'ihcRequested' => ['nullable', 'boolean'],
+            'ihcResult' => ['nullable', 'string', 'max:255'],
             'referralCompleted' => ['nullable', 'boolean'],
             'treatmentReferral' => ['nullable', 'in:referred,not_referred'],
 

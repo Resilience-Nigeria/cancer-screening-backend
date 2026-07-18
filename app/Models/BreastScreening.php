@@ -22,6 +22,16 @@ class BreastScreening extends Model
         'biradsScore',
         'breastDensity',
 
+        // Laterality — left/right findings for CBE and imaging
+        'leftCbeFinding',
+        'rightCbeFinding',
+        'leftBiradsScore',
+        'rightBiradsScore',
+        'leftBreastDensity',
+        'rightBreastDensity',
+        'leftImagingFinding',
+        'rightImagingFinding',
+
         // Breast health history & symptoms
         'breastfeedingHistory',
         'breastfeedingDuration',
@@ -37,7 +47,13 @@ class BreastScreening extends Model
 
         // Procedures & follow-up
         'biopsyDone',
+        'biopsyBookingDate',
+        'biopsyBookingFacilityId',
+        'biopsyBookingNotes',
         'biopsyResult',
+        'histologyResult',
+        'ihcRequested',
+        'ihcResult',
         'referralCompleted',
         'treatmentReferral',
 
@@ -47,6 +63,8 @@ class BreastScreening extends Model
     protected $casts = [
         'screeningDate' => 'date',
         'biopsyDone' => 'boolean',
+        'ihcRequested' => 'boolean',
+        'biopsyBookingDate' => 'date',
         'referralCompleted' => 'boolean',
         'breastfeedingDuration' => 'integer',
         'ageAtFirstMenstruation' => 'integer',

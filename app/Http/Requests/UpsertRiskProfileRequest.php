@@ -26,6 +26,9 @@ class UpsertRiskProfileRequest extends FormRequest
             'comorbiditiesJson.*' => ['string'],
             'ageAtFirstMenstruation' => ['string'],
             'ageAtMenopause' => ['string'],
+            'breastfeedingHistory' => ['nullable', 'in:yes,no'],
+            'breastfeedingDuration' => ['nullable', 'integer', 'min:0', 'max:1200'],
+            'previousBreastSurgery' => ['nullable', 'in:yes,no'],
         ];
     }
 }

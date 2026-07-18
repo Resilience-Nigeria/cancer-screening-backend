@@ -16,7 +16,7 @@ class EnsureFacilityScope
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        if ($user->isSuperAdmin() || !$user->isPartner() ) {
+        if ($user->isSuperAdmin() || $user->isPartner()) {
             return $next($request);
         }
 
