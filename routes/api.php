@@ -15,6 +15,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Api\FacilityController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AwarenessRegistrationController;
+use App\Http\Controllers\Api\SelfAssessmentController;
 
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Http\Controllers\Api\OtpController;
@@ -47,6 +48,8 @@ Route::post('/awareness/register', [AwarenessRegistrationController::class, 'sto
 Route::post('/otp/send',   [OtpController::class, 'send']);
 Route::post('/otp/verify', [OtpController::class, 'verify']);
 Route::post('/otp/resend', [OtpController::class, 'resend']);
+
+Route::post('/self-assessment', [SelfAssessmentController::class, 'store']);
 
 Route::match(['GET', 'POST'], '/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle']);
 

@@ -17,13 +17,20 @@ class AwarenessRegistration extends Model
         'email',
         'stateOfResidence',
         'lgaOfResidence',
+        'areaOfResidence',
         'campaignSource',
         'status',
         'clientId',
+        'linkedFacilityId',
     ];
 
     public function client()
     {
         return $this->belongsTo(Client::class, 'clientId', 'clientId');
+    }
+
+    public function facility()
+    {
+        return $this->belongsTo(Facility::class, 'linkedFacilityId', 'facilityId');
     }
 }
