@@ -22,7 +22,7 @@ class ClientController extends Controller
         $search = $request->string('search')->toString();
 
         $query = Client::with(['facility', 'latestRiskProfile', 'outcome'])
-            ->when(!$user->isSuperAdmin() || !$user->isPartner(), fn ($q) => $q->where('facilityId', $user->facilityId))
+            ->when(!$user->isSuperAdmin() && !$user->isPartner(), fn ($q) => $q->where('facilityId', $user->facilityId))
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($sub) use ($search) {
                     $sub->where('fullName', 'like', "%{$search}%")
@@ -114,7 +114,7 @@ class ClientController extends Controller
     {
         $user = auth('api')->user();
 
-        if (!$user->isSuperAdmin() || !$user->isPartner()   && $client->facilityId !== $user->facilityId) {
+        if (!$user->isSuperAdmin() && !$user->isPartner() && $client->facilityId !== $user->facilityId) {
             abort(403, 'You cannot access this client');
         }
     }
@@ -169,7 +169,7 @@ class ClientController extends Controller
         }
         
         // Return formatted client ID: UCTH-PLA-JNO-000001
-        return $prefix . str_pad((string) $nextNumber, 10, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string) $nextNumber, 6, '0', STR_PAD_LEFT);
     }
 
 

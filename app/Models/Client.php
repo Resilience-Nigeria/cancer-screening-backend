@@ -25,6 +25,7 @@ protected $keyType = 'string';
         'dateOfBirth',
         'age',
         'phoneNumber',
+        'email',
         'screeningCategory',
         'stateOfOrigin',
         'lgaOfOrigin',
