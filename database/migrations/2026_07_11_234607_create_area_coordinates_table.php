@@ -12,7 +12,7 @@ return new class extends Migration
     // database/migrations/xxxx_create_area_coordinates_table.php
 public function up(): void
 {
-    Schema::create('areaCoordinates', function (Blueprint $table) {
+    Schema::create('area_coordinates', function (Blueprint $table) {
         $table->id();
         $table->string('state');
         $table->string('lga');

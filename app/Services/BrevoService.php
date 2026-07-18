@@ -114,9 +114,9 @@ protected string $apiUrl    = 'https://api.brevo.com/v3';
                             <!-- Body -->
                             <tr>
                                 <td style="padding:36px 40px;">
-                                    <p style="margin:0 0 16px;color:#374151;font-size:15px;">
+                                    <!-- <p style="margin:0 0 16px;color:#374151;font-size:15px;">
                                         Dear {$name},
-                                    </p>
+                                    </p> -->
                                     <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
                                         {$messageHtml}
                                     </p>

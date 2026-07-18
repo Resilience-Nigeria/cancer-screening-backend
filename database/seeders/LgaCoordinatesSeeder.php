@@ -344,12 +344,12 @@ class LgaCoordinatesSeeder extends Seeder
             // ----------------------------------------------------------------
             // FCT
             // ----------------------------------------------------------------
-            ['state' => 'Federal Capital Territory', 'lga' => 'Abaji',           'latitude' =>  8.4719, 'longitude' =>  6.9419],
-            ['state' => 'Federal Capital Territory', 'lga' => 'Abuja Municipal', 'latitude' =>  8.8974, 'longitude' =>  7.1864],
-            ['state' => 'Federal Capital Territory', 'lga' => 'Bwari',           'latitude' =>  9.0804, 'longitude' =>  7.3697],
-            ['state' => 'Federal Capital Territory', 'lga' => 'Gwagwalada',      'latitude' =>  8.9438, 'longitude' =>  7.0806],
-            ['state' => 'Federal Capital Territory', 'lga' => 'Kuje',            'latitude' =>  8.8806, 'longitude' =>  7.2294],
-            ['state' => 'Federal Capital Territory', 'lga' => 'Kwali',           'latitude' =>  8.7428, 'longitude' =>  7.0153],
+            ['state' => 'FCT', 'lga' => 'Abaji',           'latitude' =>  8.4719, 'longitude' =>  6.9419],
+            ['state' => 'FCT', 'lga' => 'Abuja Municipal', 'latitude' =>  8.8974, 'longitude' =>  7.1864],
+            ['state' => 'FCT', 'lga' => 'Bwari',           'latitude' =>  9.0804, 'longitude' =>  7.3697],
+            ['state' => 'FCT', 'lga' => 'Gwagwalada',      'latitude' =>  8.9438, 'longitude' =>  7.0806],
+            ['state' => 'FCT', 'lga' => 'Kuje',            'latitude' =>  8.8806, 'longitude' =>  7.2294],
+            ['state' => 'FCT', 'lga' => 'Kwali',           'latitude' =>  8.7428, 'longitude' =>  7.0153],
 
             // ----------------------------------------------------------------
             // GOMBE

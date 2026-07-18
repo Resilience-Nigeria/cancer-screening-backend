@@ -20,10 +20,16 @@ class AwarenessRegistration extends Model
         'campaignSource',
         'status',
         'clientId',
+        'linkedFacilityId',
     ];
 
     public function client()
     {
         return $this->belongsTo(Client::class, 'clientId', 'clientId');
     }
+
+    public function facility()
+{
+    return $this->belongsTo(\App\Models\Facility::class, 'linkedFacilityId', 'facilityId');
+}
 }

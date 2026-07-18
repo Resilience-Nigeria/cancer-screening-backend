@@ -11,18 +11,16 @@ class OtpService
     public function __construct(
         protected WhatsAppService $whatsapp,
         protected BrevoService $brevo,
+        protected SmsService $sms,        // 👈 inject SMS service
     ) {}
 
-    /**
-     * Generate and send OTP to phone (WhatsApp) and email (if provided).
-     */
     public function sendOtp(
-        string $phoneNumber,
-        string $registrationId,
+        string  $phoneNumber,
+        string  $registrationId,
         ?string $email = null,
-        ?string $name = null,
+        ?string $name  = null,
     ): bool {
-        // Invalidate any existing unverified OTPs for this number
+        // Invalidate existing unverified OTPs
         OtpVerification::where('phoneNumber', $phoneNumber)
             ->where('verified', false)
             ->delete();
@@ -37,24 +35,36 @@ class OtpService
             'expiresAt'      => now()->addMinutes(10),
         ]);
 
+        $greeting       = $name ? " {$name}" : "";
         $whatsappMessage =
-            "Hello{$this->greeting($name)}, your NCSR verification code is:\n\n"
+            "Hello{$greeting}, your NCSR verification code is:\n\n"
             . "*{$otp}*\n\n"
             . "This code expires in 10 minutes. "
             . "Do not share it with anyone.";
 
-        $whatsappSent = $this->whatsapp->send($phoneNumber, $whatsappMessage);
+        $smsMessage =
+            "NCSR: Hello{$greeting}, your verification code is {$otp}. "
+            . "Expires in 10 minutes. Do not share.";
+        $smsSent = $this->sms->send($phoneNumber, $smsMessage);
+        // ── WhatsApp first, SMS fallback ──────────────────────────────
+        // $whatsappStatus = $this->whatsapp->sendWithStatus($phoneNumber, $whatsappMessage);
 
-        if (!$whatsappSent) {
-            Log::error('OTP WhatsApp send failed', [
-                'phone' => $phoneNumber,
-            ]);
-        }
+        // $smsSent       = false;
+        // $whatsappSent  = $whatsappStatus === 'sent';
 
+        // if (!$whatsappSent) {
+        //     Log::info('OTP: WhatsApp failed, falling back to SMS', [
+        //         'phone'           => $phoneNumber,
+        //         'whatsapp_status' => $whatsappStatus,
+        //     ]);
+        //     $smsSent = $this->sms->send($phoneNumber, $smsMessage);
+        // }
+
+        // ── Email ─────────────────────────────────────────────────────
         $emailSent = false;
         if ($email) {
             $emailMessage =
-                "Hello{$this->greeting($name)},\n\n"
+                "Dear{$greeting},\n\n"
                 . "Your NCSR phone verification code is:\n\n"
                 . "{$otp}\n\n"
                 . "Enter this code on the verification page to complete your registration.\n\n"
@@ -62,38 +72,26 @@ class OtpService
                 . "If you did not register for cancer screening, please ignore this message.";
 
             $emailSent = $this->brevo->sendTransactional(
-                to: $email,
-                name: $name ?? 'Registrant',
-                subject: 'Your NCSR Verification Code — ' . $otp,
+                to:      $email,
+                name:    $name ?? 'Registrant',
+                subject: "Your NCSR Verification Code — {$otp}",
                 message: $emailMessage,
             );
-
-            if (!$emailSent) {
-                Log::error('OTP email send failed', ['email' => $email]);
-            }
         }
-
-        // Return true if at least one channel succeeded
-        $anySent = $whatsappSent || $emailSent;
 
         Log::info('OTP send result', [
             'phone'        => $phoneNumber,
             'email'        => $email ?? 'none',
-            'whatsappSent' => $whatsappSent,
+            // 'whatsappSent' => $whatsappSent,
+            'smsSent'      => $smsSent,
             'emailSent'    => $emailSent,
         ]);
 
-        return $anySent;
-    }
+        return  $smsSent || $emailSent;
+        // return $whatsappSent || $smsSent || $emailSent;
 
-    private function greeting(?string $name): string
-    {
-        return $name ? " {$name}" : "";
-    }
+        }
 
-    /**
-     * Verify submitted OTP.
-     */
     public function verifyOtp(string $phoneNumber, string $otp): array
     {
         $record = OtpVerification::where('phoneNumber', $phoneNumber)

@@ -10,6 +10,8 @@ use App\Services\FacilityService;
 use App\Services\OtpService;
 use App\Services\BrevoService;
 use App\Services\WhatsAppService;
+use App\Services\SmsService;
+
 use Illuminate\Http\JsonResponse;
 
 class AwarenessRegistrationController extends Controller
@@ -19,6 +21,8 @@ class AwarenessRegistrationController extends Controller
     protected OtpService $otpService,
     protected BrevoService $brevo,
     protected WhatsAppService $whatsapp,
+    protected SmsService      $sms,       // 👈 add
+
 ) {}
     // public function __construct(protected FacilityService $facilityService) {}
 
@@ -74,6 +78,8 @@ public function store(StoreAwarenessRegistrationRequest $request): JsonResponse
     $registration->update([
         'status'             => $facility ? 'linked' : 'pending',
         'linkedFacilityId'   => $facility?->facilityId,
+        'linkedFacilityId' => $facility?->facilityId,  // 👈 save it
+
     ]);
 
     // Send OTP — full notifications fire after verification

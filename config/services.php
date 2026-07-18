@@ -45,6 +45,15 @@ return [
         'key'        => env('BREVO_API_KEY'),
         'from_email' => env('BREVO_FROM_EMAIL', 'noreply@ncsr.gov.ng'),
         'from_name'  => env('BREVO_FROM_NAME', 'NCSR — NICRAT'),
+        'sms_sender' => env('BREVO_SMS_SENDER', 'NCSR'),
     ],
 
+    'twilio' => [
+    'sid'        => env('TWILIO_SID'),
+    'auth_token' => env('TWILIO_AUTH_TOKEN'),
+    'from'       => env('TWILIO_FROM'),
+    'enabled'    => env('TWILIO_SMS_ENABLED', true),
+    'whatsapp_from'  => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
+    'whatsapp_enabled' => env('TWILIO_WHATSAPP_ENABLED', true),
+],
 ];

@@ -23,6 +23,9 @@ class Facility extends Model
         'status',
         'isScreeningCenter',
         'isTreatmentCenter',
+        'latitude',
+        'longitude',
+        'isActive',
     ];
 
     protected $casts = [
