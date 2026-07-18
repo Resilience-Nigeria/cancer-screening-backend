@@ -19,13 +19,16 @@ namespace App\Services;
 class RiskClassificationService
 {
     protected const URGENT_SYMPTOMS = [
-        'blood_in_stool', 'blood_in_urine', 'coughing_blood',
+        'blood_in_stool', 'blood_in_urine',
         'vaginal_bleeding_after_menopause', 'bleeding_after_sex',
-        'non_healing_ulcer', 'mole_changing_size',
+        'jaundice', 'persistent_abdominal_pain',
     ];
 
+    // Breast findings apply to everyone — breast cancer is not female-only,
+    // even though routine population screening programs target women.
     protected const LUMP_SYMPTOMS = [
-        'lump_breast', 'lump_neck', 'lump_underarm', 'lump_groin', 'lump_elsewhere',
+        'lump_breast', 'nipple_discharge', 'breast_skin_changes',
+        'lump_neck', 'lump_underarm', 'lump_groin', 'lump_elsewhere',
     ];
 
     protected const GENERAL_SYMPTOMS = [
@@ -72,7 +75,7 @@ class RiskClassificationService
                 'riskCategory' => 'symptomatic_high',
                 'recommendation' => 'Some of the symptoms reported need prompt medical evaluation. '
                     . 'Please see a healthcare provider as soon as possible rather than waiting for a routine screening slot. '
-                    . 'If symptoms are severe (heavy bleeding, coughing blood, or a rapidly growing lump), seek urgent care now.',
+                    . 'If symptoms are severe (heavy bleeding or a rapidly growing lump), seek urgent care now.',
                 'flaggedReasons' => $flags,
                 'suggestedCancerTypes' => $suggested ?: $this->eligibleTypesByAgeSex($age, $sex),
             ];
@@ -166,11 +169,18 @@ class RiskClassificationService
     protected function suggestedTypesFromSymptoms(array $symptoms, string $sex): array
     {
         $types = [];
-        if (in_array('lump_breast', $symptoms, true)) $types[] = 'breast';
+        // Breast cancer is not female-only — these are never gated by sex.
+        if (in_array('lump_breast', $symptoms, true)
+            || in_array('nipple_discharge', $symptoms, true)
+            || in_array('breast_skin_changes', $symptoms, true)) {
+            $types[] = 'breast';
+        }
         if (in_array('vaginal_bleeding_after_menopause', $symptoms, true)
             || in_array('bleeding_after_sex', $symptoms, true)) $types[] = 'cervical';
-        if (in_array('blood_in_stool', $symptoms, true)) $types[] = 'colorectal';
+        if (in_array('blood_in_stool', $symptoms, true)
+            || in_array('persistent_abdominal_pain', $symptoms, true)) $types[] = 'colorectal';
         if (in_array('blood_in_urine', $symptoms, true) && $sex === 'male') $types[] = 'prostate';
+        if (in_array('jaundice', $symptoms, true)) $types[] = 'liver';
         return array_values(array_unique($types));
     }
 
