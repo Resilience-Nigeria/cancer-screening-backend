@@ -47,4 +47,11 @@ return [
         'from_name'  => env('BREVO_FROM_NAME', 'NCSR — NICRAT'),
     ],
 
+    'bulksms_nigeria' => [
+        'api_token' => env('BULKSMS_NIGERIA_API_TOKEN'),
+        'sender_id' => env('BULKSMS_NIGERIA_SENDER_ID', 'NCSR'),
+        // Set to true to hit the sandbox endpoint instead (simulated sends, no wallet deduction).
+        'sandbox'   => env('BULKSMS_NIGERIA_SANDBOX', false),
+    ],
+
 ];

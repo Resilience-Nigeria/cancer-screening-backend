@@ -11,6 +11,7 @@ class OtpService
     public function __construct(
         protected WhatsAppService $whatsapp,
         protected BrevoService $brevo,
+        protected BulkSmsService $bulkSms,
     ) {}
 
     /**
@@ -51,6 +52,21 @@ class OtpService
             ]);
         }
 
+        // Fallback: WhatsApp is the primary channel, but not every number
+        // has WhatsApp — send a plain SMS via BulkSMS Nigeria if it failed,
+        // so the OTP still reaches the recipient.
+        $smsSent = false;
+        if (!$whatsappSent) {
+            $smsMessage = "Your NCSR verification code is {$otp}. It expires in 10 minutes. Do not share it with anyone.";
+            $smsSent = $this->bulkSms->send($phoneNumber, $smsMessage);
+
+            if (!$smsSent) {
+                Log::error('OTP SMS (BulkSMS Nigeria) send failed', [
+                    'phone' => $phoneNumber,
+                ]);
+            }
+        }
+
         $emailSent = false;
         if ($email) {
             $emailMessage =
@@ -74,12 +90,13 @@ class OtpService
         }
 
         // Return true if at least one channel succeeded
-        $anySent = $whatsappSent || $emailSent;
+        $anySent = $whatsappSent || $smsSent || $emailSent;
 
         Log::info('OTP send result', [
             'phone'        => $phoneNumber,
             'email'        => $email ?? 'none',
             'whatsappSent' => $whatsappSent,
+            'smsSent'      => $smsSent,
             'emailSent'    => $emailSent,
         ]);
 
