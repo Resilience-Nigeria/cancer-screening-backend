@@ -17,6 +17,7 @@ class AwarenessRegistration extends Model
         'email',
         'stateOfResidence',
         'lgaOfResidence',
+        'areaOfResidence',
         'campaignSource',
         'status',
         'clientId',
@@ -29,7 +30,7 @@ class AwarenessRegistration extends Model
     }
 
     public function facility()
-{
-    return $this->belongsTo(\App\Models\Facility::class, 'linkedFacilityId', 'facilityId');
-}
+    {
+        return $this->belongsTo(Facility::class, 'linkedFacilityId', 'facilityId');
+    }
 }
