@@ -26,6 +26,10 @@ class StoreClientRequest extends FormRequest
             'stateOfResidence' => ['required', 'string', 'max:255'],
             'lgaOfResidence' => ['required', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:300'],
+            'occupation' => ['nullable', 'string', 'max:255'],
+            'nextOfKinName' => ['nullable', 'string', 'max:255'],
+            'nextOfKinPhone' => ['nullable', 'string', 'max:30'],
+            'nextOfKinRelationship' => ['nullable', 'string', 'max:100'],
             'landmark' => ['nullable', 'string', 'max:300'],
             'registrationDate' => ['required', 'date'],
         ];

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreScreeningVisitRequest;
+use App\Http\Requests\StoreVisitExaminationRequest;
+use App\Http\Requests\StoreOutcomeClassificationRequest;
 use App\Models\Client;
 use App\Models\ScreeningVisit;
 use Illuminate\Http\JsonResponse;
@@ -152,9 +154,64 @@ class ScreeningVisitController extends Controller
             'colorectalScreening',
             'liverScreening',
             'prostateScreening',
+            'examination',
         ]);
 
         return response()->json([
+            'visit' => $visit,
+        ]);
+    }
+
+    /**
+     * Stage 2, Section E — physical examination (vitals + general exam).
+     * One examination per visit; resubmitting updates the same record.
+     */
+    public function storeExamination(StoreVisitExaminationRequest $request, ScreeningVisit $visit): JsonResponse
+    {
+        $this->authorizeVisit($visit);
+
+        $data = $request->validated();
+
+        // Auto-calculate BMI server-side if height/weight given but BMI wasn't.
+        if (empty($data['bmi']) && !empty($data['heightCm']) && !empty($data['weightKg'])) {
+            $heightM = $data['heightCm'] / 100;
+            if ($heightM > 0) {
+                $data['bmi'] = round($data['weightKg'] / ($heightM * $heightM), 1);
+            }
+        }
+
+        $examination = \App\Models\VisitExamination::updateOrCreate(
+            ['visitId' => $visit->visitId],
+            [
+                ...$data,
+                'visitId' => $visit->visitId,
+                'examinedBy' => auth('api')->id(),
+                'examinedAt' => now(),
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Physical examination saved successfully',
+            'examination' => $examination,
+        ], 201);
+    }
+
+    /**
+     * Stage 2, Section G — overall visit-level outcome classification.
+     * Separate from each cancer type's own screeningResult field.
+     */
+    public function classifyOutcome(StoreOutcomeClassificationRequest $request, ScreeningVisit $visit): JsonResponse
+    {
+        $this->authorizeVisit($visit);
+
+        $visit->update([
+            ...$request->validated(),
+            'outcomeClassifiedBy' => auth('api')->id(),
+            'outcomeClassifiedAt' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Screening outcome recorded successfully',
             'visit' => $visit,
         ]);
     }

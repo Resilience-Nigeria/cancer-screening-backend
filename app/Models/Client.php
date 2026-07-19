@@ -32,6 +32,10 @@ protected $keyType = 'string';
         'stateOfResidence',
         'lgaOfResidence',
         'address',
+        'occupation',
+        'nextOfKinName',
+        'nextOfKinPhone',
+        'nextOfKinRelationship',
         'landmark',
         'registrationDate',
         'nin'

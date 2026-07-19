@@ -29,6 +29,16 @@ class UpsertRiskProfileRequest extends FormRequest
             'breastfeedingHistory' => ['nullable', 'in:yes,no'],
             'breastfeedingDuration' => ['nullable', 'integer', 'min:0', 'max:1200'],
             'previousBreastSurgery' => ['nullable', 'in:yes,no'],
+
+            // Stage 2, Section C — medical history confirm checklist
+            'previousCancer' => ['nullable', 'in:yes,no,unknown'],
+            'previousCancerDetails' => ['nullable', 'string', 'max:255'],
+            'previousSurgeries' => ['nullable', 'in:yes,no,unknown'],
+            'previousSurgeriesDetails' => ['nullable', 'string', 'max:255'],
+            'diabetes' => ['nullable', 'in:yes,no,unknown'],
+            'hypertension' => ['nullable', 'in:yes,no,unknown'],
+            'previousScreening' => ['nullable', 'in:yes,no,unknown'],
+            'previousScreeningDetails' => ['nullable', 'string', 'max:255'],
         ];
     }
 }
