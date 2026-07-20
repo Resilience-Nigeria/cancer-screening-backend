@@ -105,4 +105,33 @@ private function maskPhone(string $phone): string
     return substr($clean, 0, 3) . '****' . substr($clean, -4);
 }
 
+/**
+ * Used by Stage 2 (Clinical Screening) to find a prior Bloom
+ * self-assessment for a client who hasn't been registered as a
+ * full Client yet — Bloom only creates an AwarenessRegistration,
+ * never a Client, so Stage 2's normal client lookup can't see it.
+ */
+public function lookupByPhone(\Illuminate\Http\Request $request): JsonResponse
+{
+    $phone = trim((string) $request->query('phone', ''));
+
+    if (!$phone) {
+        return response()->json(['registration' => null]);
+    }
+
+    $registration = AwarenessRegistration::where('phoneNumber', $phone)
+        ->latest('registrationId')
+        ->with(['selfAssessments' => fn ($q) => $q->latest('assessmentId')->limit(1)])
+        ->first();
+
+    if (!$registration) {
+        return response()->json(['registration' => null]);
+    }
+
+    return response()->json([
+        'registration' => $registration,
+        'selfAssessment' => $registration->selfAssessments->first(),
+    ]);
+}
+
 }
