@@ -18,7 +18,7 @@ class StoreClientRequest extends FormRequest
             'gender' => ['required', 'in:male,female'],
             'dateOfBirth' => ['required', 'date', 'before_or_equal:today'],
             'phoneNumber' => ['required', 'string', 'max:30'],
-            'email' => ['required', 'email', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
             'nin' => ['nullable', 'string', 'max:30'],
             'screeningCategory' => ['required', 'in:new_client,follow_up'],
             'stateOfOrigin' => ['required', 'string', 'max:255'],
@@ -38,7 +38,6 @@ class StoreClientRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'email.required' => 'The email address field is required.',
             'email.email' => 'Please enter a valid email address.',
             'stateOfOrigin.required' => 'The state of origin field is required.',
             'lgaOfOrigin.required' => 'The LGA of origin field is required.',
