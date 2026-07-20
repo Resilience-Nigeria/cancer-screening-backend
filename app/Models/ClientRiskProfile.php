@@ -29,6 +29,14 @@ class ClientRiskProfile extends Model
         'breastfeedingHistory',
         'breastfeedingDuration',
         'previousBreastSurgery',
+        'previousCancer',
+        'previousCancerDetails',
+        'previousSurgeries',
+        'previousSurgeriesDetails',
+        'diabetes',
+        'hypertension',
+        'previousScreening',
+        'previousScreeningDetails',
     ];
 
     protected $casts = [

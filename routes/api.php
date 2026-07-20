@@ -89,6 +89,8 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/clients/{client}/visits', [ScreeningVisitController::class, 'index']);
     Route::post('/clients/{client}/visits', [ScreeningVisitController::class, 'store']);
     Route::get('/visits/{visit}', [ScreeningVisitController::class, 'show']);
+    Route::post('/visits/{visit}/examination', [ScreeningVisitController::class, 'storeExamination']);
+    Route::post('/visits/{visit}/outcome', [ScreeningVisitController::class, 'classifyOutcome']);
 
     Route::get('/visits/{visit}/cervical-screening', [CervicalScreeningController::class, 'show']);
     Route::post('/visits/{visit}/cervical-screening', [CervicalScreeningController::class, 'store']);

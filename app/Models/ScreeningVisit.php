@@ -18,12 +18,24 @@ class ScreeningVisit extends Model
         'visitType',
         'notes',
         'createdBy',
-        'treatmentReferral'
+        'treatmentReferral',
+        'overallOutcome',
+        'outcomeNotes',
+        'repeatScreeningDate',
+        'outcomeClassifiedBy',
+        'outcomeClassifiedAt',
     ];
 
     protected $casts = [
         'visitDate' => 'date',
+        'repeatScreeningDate' => 'date',
+        'outcomeClassifiedAt' => 'datetime',
     ];
+
+    public function examination(): HasOne
+    {
+        return $this->hasOne(VisitExamination::class, 'visitId', 'visitId');
+    }
 
     public function client(): BelongsTo
     {
