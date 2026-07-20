@@ -48,7 +48,15 @@ return [
         'sms_sender' => env('BREVO_SMS_SENDER', 'NCSR'),
     ],
 
-    'twilio' => [
+    'bulksms_nigeria' => [
+        'api_token' => env('BULKSMS_NIGERIA_API_TOKEN'),
+        'sender_id' => env('BULKSMS_NIGERIA_SENDER_ID', 'NCSR'),
+        // Set to true to hit the sandbox endpoint instead (simulated sends, no wallet deduction).
+        'sandbox'   => env('BULKSMS_NIGERIA_SANDBOX', false),
+    ],
+
+
+        'twilio' => [
     'sid'        => env('TWILIO_SID'),
     'auth_token' => env('TWILIO_AUTH_TOKEN'),
     'from'       => env('TWILIO_FROM'),
@@ -56,4 +64,5 @@ return [
     'whatsapp_from'  => env('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886'),
     'whatsapp_enabled' => env('TWILIO_WHATSAPP_ENABLED', true),
 ],
+
 ];

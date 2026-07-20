@@ -11,9 +11,13 @@ class OtpService
     public function __construct(
         protected WhatsAppService $whatsapp,
         protected BrevoService $brevo,
-        protected SmsService $sms,        // 👈 inject SMS service
+        protected BulkSmsService $bulkSms,
     ) {}
 
+    /**
+     * Generate and send OTP.
+     * Channel order: WhatsApp (Twilio) primary, SMS (BulkSMS Nigeria) fallback, email always if provided.
+     */
     public function sendOtp(
         string  $phoneNumber,
         string  $registrationId,
@@ -35,32 +39,40 @@ class OtpService
             'expiresAt'      => now()->addMinutes(10),
         ]);
 
-        $greeting       = $name ? " {$name}" : "";
+        $greeting = $name ? " {$name}" : "";
+
+        // ── WhatsApp first (Twilio) ──────────────────────────────
         $whatsappMessage =
             "Hello{$greeting}, your NCSR verification code is:\n\n"
             . "*{$otp}*\n\n"
             . "This code expires in 10 minutes. "
             . "Do not share it with anyone.";
 
-        $smsMessage =
-            "NCSR: Hello{$greeting}, your verification code is {$otp}. "
-            . "Expires in 10 minutes. Do not share.";
-        $smsSent = $this->sms->send($phoneNumber, $smsMessage);
-        // ── WhatsApp first, SMS fallback ──────────────────────────────
-        // $whatsappStatus = $this->whatsapp->sendWithStatus($phoneNumber, $whatsappMessage);
+        $whatsappSent = $this->whatsapp->send($phoneNumber, $whatsappMessage);
 
-        // $smsSent       = false;
-        // $whatsappSent  = $whatsappStatus === 'sent';
+        if (!$whatsappSent) {
+            Log::error('OTP WhatsApp send failed', [
+                'phone' => $phoneNumber,
+            ]);
+        }
 
-        // if (!$whatsappSent) {
-        //     Log::info('OTP: WhatsApp failed, falling back to SMS', [
-        //         'phone'           => $phoneNumber,
-        //         'whatsapp_status' => $whatsappStatus,
-        //     ]);
-        //     $smsSent = $this->sms->send($phoneNumber, $smsMessage);
-        // }
+        // ── SMS fallback (BulkSMS Nigeria) — only if WhatsApp failed ──
+        $smsSent = false;
+        if (!$whatsappSent) {
+            $smsMessage =
+                "NCSR: Hello{$greeting}, your verification code is {$otp}. "
+                . "Expires in 10 minutes. Do not share.";
 
-        // ── Email ─────────────────────────────────────────────────────
+            $smsSent = $this->bulkSms->send($phoneNumber, $smsMessage);
+
+            if (!$smsSent) {
+                Log::error('OTP SMS (BulkSMS Nigeria) send failed', [
+                    'phone' => $phoneNumber,
+                ]);
+            }
+        }
+
+        // ── Email (always, if provided) ──────────────────────────
         $emailSent = false;
         if ($email) {
             $emailMessage =
@@ -77,20 +89,24 @@ class OtpService
                 subject: "Your NCSR Verification Code — {$otp}",
                 message: $emailMessage,
             );
+
+            if (!$emailSent) {
+                Log::error('OTP email send failed', ['email' => $email]);
+            }
         }
+
+        $anySent = $whatsappSent || $smsSent || $emailSent;
 
         Log::info('OTP send result', [
             'phone'        => $phoneNumber,
             'email'        => $email ?? 'none',
-            // 'whatsappSent' => $whatsappSent,
+            'whatsappSent' => $whatsappSent,
             'smsSent'      => $smsSent,
             'emailSent'    => $emailSent,
         ]);
 
-        return  $smsSent || $emailSent;
-        // return $whatsappSent || $smsSent || $emailSent;
-
-        }
+        return $anySent;
+    }
 
     public function verifyOtp(string $phoneNumber, string $otp): array
     {
