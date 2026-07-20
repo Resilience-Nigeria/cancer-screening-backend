@@ -23,12 +23,21 @@ class Facility extends Model
         'status',
         'isScreeningCenter',
         'isTreatmentCenter',
+        'facilityType',
+        'facilityLevel',
+        'navigatorName',
+        'navigatorPhone',
+        'navigatorEmail',
+        'whatsappNumber',
+        'isActive',
     ];
 
     protected $casts = [
         'status' => 'string',
         'isScreeningCenter' => 'boolean',
         'isTreatmentCenter' => 'boolean',
+        'facilityType' => 'array',
+        'isActive' => 'boolean',
     ];
 
     /**

@@ -38,7 +38,9 @@ protected $keyType = 'string';
         'nextOfKinRelationship',
         'landmark',
         'registrationDate',
-        'nin'
+        'nin',
+        'journeyStage',
+        'linkedFacilityId',
     ];
 
     protected $casts = [
@@ -51,6 +53,16 @@ protected $keyType = 'string';
     public function facility(): BelongsTo
     {
         return $this->belongsTo(Facility::class, 'facilityId');
+    }
+
+    public function linkedFacility(): BelongsTo
+    {
+        return $this->belongsTo(Facility::class, 'linkedFacilityId', 'facilityId');
+    }
+
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(ClientReferral::class, 'clientId', 'clientId');
     }
 
     public function riskProfiles(): HasMany
