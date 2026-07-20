@@ -134,9 +134,108 @@ class FacilityService
         $dLat = deg2rad($lat2 - $lat1);
         $dLng = deg2rad($lng2 - $lng1);
 
-        $a = sin($dLat / 2) ** 2
-           + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+    return null;
+}
 
-        return $R * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    /**
+     * Find the nearest secondary or tertiary facility for referral —
+     * used when a Stage 2 screening outcome is "suspicious" or
+     * "urgent_referral" and the client needs to be linked onward for
+     * confirmation/diagnostic workup or treatment.
+     *
+     * Same priority order as findNearestScreeningFacility, but filtered
+     * to facilityLevel in [secondary, tertiary] instead of sub-hub type.
+     */
+    public function findNearestReferralFacility(
+        string $state,
+        string $lga,
+        ?string $area = null,
+    ): ?Facility {
+        $levelFilter = fn ($q) => $q->whereIn('facilityLevel', ['secondary', 'tertiary']);
+
+        // ── Step 1: Exact LGA + state match ──────────────────────────
+        $exact = Facility::where($levelFilter)
+            ->where('isActive', true)
+            ->where('facilityState', $state)
+            ->where('facilityLga', $lga)
+            ->orderByRaw("FIELD(facilityLevel, 'tertiary', 'secondary')")
+            ->first();
+
+        if ($exact) {
+            Log::info('Referral facility: exact LGA match', ['facility' => $exact->facilityName]);
+            return $exact;
+        }
+
+        // ── Get coordinates — area first, then LGA center ─────────────
+        $coords = null;
+
+        if ($area) {
+            $coords = DB::table('areaCoordinates')
+                ->whereRaw('LOWER(state) = ?', [strtolower($state)])
+                ->whereRaw('LOWER(lga) = ?', [strtolower($lga)])
+                ->whereRaw('LOWER(area) = ?', [strtolower($area)])
+                ->first();
+        }
+
+        if (!$coords) {
+            $coords = DB::table('lgaCoordinates')
+                ->whereRaw('LOWER(state) = ?', [strtolower($state)])
+                ->whereRaw('LOWER(lga) = ?', [strtolower($lga)])
+                ->first();
+        }
+
+        // ── Step 2: Distance-based search across all active facilities ──
+        if ($coords) {
+            $clientLat = (float) $coords->latitude;
+            $clientLng = (float) $coords->longitude;
+
+            $allFacilities = Facility::where($levelFilter)
+                ->where('isActive', true)
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude')
+                ->get();
+
+            if ($allFacilities->isNotEmpty()) {
+                $nearest = $allFacilities
+                    ->map(function ($f) use ($clientLat, $clientLng) {
+                        $f->distanceKm = $this->haversineDistance(
+                            $clientLat, $clientLng,
+                            (float) $f->latitude,
+                            (float) $f->longitude,
+                        );
+                        return $f;
+                    })
+                    ->sortBy('distanceKm')
+                    ->first();
+
+                Log::info('Referral facility: nearest by distance', [
+                    'facility' => $nearest->facilityName,
+                    'level' => $nearest->facilityLevel,
+                    'distance_km' => round($nearest->distanceKm, 2),
+                ]);
+
+                return $nearest;
+            }
+        }
+
+        // ── Step 3: No coordinates — same state fallback ────────────────
+        $fallback = Facility::where($levelFilter)
+            ->where('isActive', true)
+            ->where('facilityState', $state)
+            ->orderByRaw("FIELD(facilityLevel, 'tertiary', 'secondary')")
+            ->first();
+
+        if ($fallback) {
+            Log::info('Referral facility: state-level fallback', ['facility' => $fallback->facilityName]);
+            return $fallback;
+        }
+
+        Log::warning('Referral facility: no active secondary/tertiary match found', [
+            'state' => $state,
+            'lga' => $lga,
+            'area' => $area,
+        ]);
+
+        return null;
     }
 }

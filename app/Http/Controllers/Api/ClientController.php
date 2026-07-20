@@ -85,6 +85,7 @@ class ClientController extends Controller
             'visits.colorectalScreening',
             'visits.liverScreening',
             'visits.prostateScreening',
+            'visits.examination',
             'outcome',
         ]);
 

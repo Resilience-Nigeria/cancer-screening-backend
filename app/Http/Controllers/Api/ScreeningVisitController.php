@@ -200,8 +200,12 @@ class ScreeningVisitController extends Controller
      * Stage 2, Section G — overall visit-level outcome classification.
      * Separate from each cancer type's own screeningResult field.
      */
-    public function classifyOutcome(StoreOutcomeClassificationRequest $request, ScreeningVisit $visit): JsonResponse
-    {
+    public function classifyOutcome(
+        StoreOutcomeClassificationRequest $request,
+        ScreeningVisit $visit,
+        \App\Services\FacilityService $facilityService,
+        \App\Services\ReferralService $referralService,
+    ): JsonResponse {
         $this->authorizeVisit($visit);
 
         $visit->update([
@@ -210,9 +214,41 @@ class ScreeningVisitController extends Controller
             'outcomeClassifiedAt' => now(),
         ]);
 
+        $referral = null;
+
+        // Auto-link to a secondary/tertiary facility when the outcome
+        // warrants it, so the client isn't left without a next step.
+        if (in_array($visit->overallOutcome, ['suspicious', 'urgent_referral'], true)) {
+            $client = $visit->client;
+            $fromFacility = $visit->facility;
+
+            if ($client && $fromFacility && $client->stateOfResidence && $client->lgaOfResidence) {
+                $toFacility = $facilityService->findNearestReferralFacility(
+                    $client->stateOfResidence,
+                    $client->lgaOfResidence,
+                );
+
+                // Don't create a referral to the same facility the client is already at.
+                if ($toFacility && $toFacility->facilityId !== $fromFacility->facilityId) {
+                    $urgencyNote = $visit->overallOutcome === 'urgent_referral'
+                        ? 'URGENT — same-day referral required.'
+                        : 'Referred following a suspicious Stage 2 screening outcome.';
+
+                    $referral = $referralService->referToMainHub(
+                        $client,
+                        $fromFacility,
+                        $toFacility,
+                        trim($urgencyNote . ' ' . ($visit->outcomeNotes ?? '')),
+                    );
+                    $referral->load('toFacility', 'fromFacility');
+                }
+            }
+        }
+
         return response()->json([
             'message' => 'Screening outcome recorded successfully',
             'visit' => $visit,
+            'referral' => $referral,
         ]);
     }
 

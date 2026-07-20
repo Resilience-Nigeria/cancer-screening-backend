@@ -25,6 +25,12 @@ class Facility extends Model
         'isTreatmentCenter',
         'latitude',
         'longitude',
+        'facilityType',
+        'facilityLevel',
+        'navigatorName',
+        'navigatorPhone',
+        'navigatorEmail',
+        'whatsappNumber',
         'isActive',
     ];
 
@@ -32,6 +38,8 @@ class Facility extends Model
         'status' => 'string',
         'isScreeningCenter' => 'boolean',
         'isTreatmentCenter' => 'boolean',
+        'facilityType' => 'array',
+        'isActive' => 'boolean',
     ];
 
     /**
