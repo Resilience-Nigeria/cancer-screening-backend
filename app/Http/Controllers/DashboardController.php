@@ -291,38 +291,63 @@ class DashboardController extends Controller
             $user = Auth::user();
             $hasNationalAccess = $this->hasNationalAccess($user);
 
-            $query = DB::table('screening_visits')
+            $screeningsQuery = DB::table('screening_visits')
                 ->join('clients', 'screening_visits.clientId', '=', 'clients.clientId')
                 ->selectRaw("
                     DATE_FORMAT(screening_visits.visitDate, '%b') as month,
-                    COUNT(DISTINCT screening_visits.visitId) as screenings,
-                    3 as referrals
+                    COUNT(DISTINCT screening_visits.visitId) as screenings
                 ")
                 ->where('screening_visits.visitDate', '>=', now()->subMonths(6)->startOfMonth());
 
+            $referralsQuery = DB::table('client_referrals')
+                ->join('clients', 'client_referrals.clientId', '=', 'clients.clientId')
+                ->selectRaw("
+                    DATE_FORMAT(client_referrals.referralDate, '%b') as month,
+                    COUNT(DISTINCT client_referrals.referralId) as referrals
+                ")
+                ->where('client_referrals.referralDate', '>=', now()->subMonths(6)->startOfMonth());
+
             // Apply RBAC filters
             if (!$hasNationalAccess) {
-                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
+                $visibleIds = $user->visibleFacilityIds() ?? [];
+                $screeningsQuery->whereIn('clients.facilityId', $visibleIds);
+                $referralsQuery->whereIn('clients.facilityId', $visibleIds);
             } else {
                 if ($request->has('facilityId') && $request->facilityId !== 'all') {
-                    $query->where('clients.facilityId', $request->facilityId);
+                    $screeningsQuery->where('clients.facilityId', $request->facilityId);
+                    $referralsQuery->where('clients.facilityId', $request->facilityId);
                 }
 
                 if ($request->has('dateFrom') && $request->dateFrom) {
-                    $query->whereDate('screening_visits.visitDate', '>=', $request->dateFrom);
+                    $screeningsQuery->whereDate('screening_visits.visitDate', '>=', $request->dateFrom);
+                    $referralsQuery->whereDate('client_referrals.referralDate', '>=', $request->dateFrom);
                 }
 
                 if ($request->has('dateTo') && $request->dateTo) {
-                    $query->whereDate('screening_visits.visitDate', '<=', $request->dateTo);
+                    $screeningsQuery->whereDate('screening_visits.visitDate', '<=', $request->dateTo);
+                    $referralsQuery->whereDate('client_referrals.referralDate', '<=', $request->dateTo);
                 }
             }
 
-            $trends = $query->groupBy('month')
-                ->orderBy(DB::raw('MIN(screening_visits.visitDate)'))
-                ->get();
+            $screeningsByMonth = $screeningsQuery->groupBy('month')->get()->keyBy('month');
+            $referralsByMonth = $referralsQuery->groupBy('month')->get()->keyBy('month');
+
+            // Build the last 6 calendar months explicitly, rather than only
+            // months that happen to appear in one of the two datasets — a
+            // month with referrals but zero screenings (or vice versa)
+            // would otherwise silently vanish from the chart.
+            $trends = collect();
+            for ($i = 5; $i >= 0; $i--) {
+                $monthLabel = now()->subMonths($i)->format('M');
+                $trends->push([
+                    'month' => $monthLabel,
+                    'screenings' => (int) ($screeningsByMonth[$monthLabel]->screenings ?? 0),
+                    'referrals' => (int) ($referralsByMonth[$monthLabel]->referrals ?? 0),
+                ]);
+            }
 
             return response()->json([
-                'data' => $trends
+                'data' => $trends->values(),
             ]);
         } catch (\Exception $e) {
             return response()->json([
