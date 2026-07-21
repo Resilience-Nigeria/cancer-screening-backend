@@ -108,6 +108,14 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::post('/visits/{visit}/examination', [ScreeningVisitController::class, 'storeExamination']);
     Route::post('/visits/{visit}/outcome', [ScreeningVisitController::class, 'classifyOutcome']);
 
+    // ── Stage 3: Diagnostic Evaluation ──────────────────────────────────
+    Route::get('/diagnostic-evaluations/pending-referrals', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'pendingReferrals']);
+    Route::get('/diagnostic-evaluations/client-context/{clientId}', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'clientContext']);
+    Route::post('/diagnostic-evaluations', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'store']);
+    Route::get('/diagnostic-evaluations/{evaluation}', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'show']);
+    Route::patch('/diagnostic-evaluations/{evaluation}', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'update']);
+    Route::post('/diagnostic-evaluations/{evaluation}/pathology', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'finalizePathology']);
+
     Route::get('/visits/{visit}/cervical-screening', [CervicalScreeningController::class, 'show']);
     Route::post('/visits/{visit}/cervical-screening', [CervicalScreeningController::class, 'store']);
 
