@@ -73,27 +73,50 @@ class User extends Authenticatable implements JWTSubject
      */
     public function isSuperAdmin(): bool
     {
-        return $this->user_role?->roleName === 'SUPER_ADMIN';
+        return $this->user_role?->roleName === 'NICRAT_SUPER_ADMIN';
     }
 
     public function isNicratStaff(): bool
     {
-        return $this->user_role?->roleName === 'NICRAT_STAFF';
+        return $this->user_role?->roleName === 'NICRAT_ADMIN';
     }
 
     public function isHospitalAdmin(): bool
     {
-        return $this->user_role?->roleName === 'HOSPITAL_ADMIN';
+        return $this->user_role?->roleName === 'NAVIGATOR';
     }
 
     public function isDataClerk(): bool
     {
-        return $this->user_role?->roleName === 'DATA_CLERK';
+        return $this->user_role?->roleName === 'NURSE';
     }
 
     public function isPartner(): bool
     {
         return $this->user_role?->roleName === 'PARTNER';
+    }
+
+    public function isDoctor(): bool
+    {
+        return $this->user_role?->roleName === 'DOCTOR';
+    }
+
+    // Clearer aliases matching the current role names — the isX() methods
+    // above are kept as-is so existing call sites aren't broken by a
+    // rename; new code should prefer these.
+    public function isNicratAdmin(): bool
+    {
+        return $this->isNicratStaff();
+    }
+
+    public function isNavigator(): bool
+    {
+        return $this->isHospitalAdmin();
+    }
+
+    public function isNurse(): bool
+    {
+        return $this->isDataClerk();
     }
 
    
@@ -103,7 +126,7 @@ class User extends Authenticatable implements JWTSubject
     public function hasNationalAccess(): bool
     {
         $roleName = $this->user_role?->roleName;
-        return in_array($roleName, ['SUPER_ADMIN', 'NICRAT_STAFF']);
+        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN']);
     }
 
     /**
@@ -112,7 +135,7 @@ class User extends Authenticatable implements JWTSubject
     public function hasFacilityAccess(): bool
     {
         $roleName = $this->user_role?->roleName;
-        return in_array($roleName, ['HOSPITAL_ADMIN', 'DATA_CLERK']);
+        return in_array($roleName, ['NAVIGATOR', 'NURSE', 'DOCTOR']);
     }
 
     /**
@@ -121,22 +144,22 @@ class User extends Authenticatable implements JWTSubject
     public function canCreateUsers(): bool
     {
         $roleName = $this->user_role?->roleName;
-        return in_array($roleName, ['SUPER_ADMIN', 'HOSPITAL_ADMIN']);
+        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NAVIGATOR']);
     }
 
     /**
      * Get roles this user can create
-     * SUPER_ADMIN can create: NICRAT_STAFF, HOSPITAL_ADMIN
-     * HOSPITAL_ADMIN can create: DATA_CLERK (nurses, doctors, staff)
+     * NICRAT_SUPER_ADMIN can create: NICRAT_ADMIN, NAVIGATOR, PARTNER
+     * NAVIGATOR can create: NURSE, DOCTOR
      */
     public function getRolesCanCreate(): array
     {
         if ($this->isSuperAdmin()) {
-            return Role::whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'PARTNER'])->get()->toArray();
+            return Role::whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'PARTNER'])->get()->toArray();
         }
 
         if ($this->isHospitalAdmin()) {
-            return Role::where('roleName', 'DATA_CLERK')->get()->toArray();
+            return Role::whereIn('roleName', ['NURSE', 'DOCTOR'])->get()->toArray();
         }
 
         return [];

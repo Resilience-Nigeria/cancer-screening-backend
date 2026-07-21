@@ -28,7 +28,7 @@ class DashboardController extends Controller
     private function hasNationalAccess($user): bool
     {
         $roleName = $user->user_role?->roleName ?? $user->role;
-        return in_array($roleName, ['SUPER_ADMIN', 'NICRAT_STAFF', 'PARTNER']);
+        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN', 'PARTNER']);
     }
 
     /**

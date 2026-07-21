@@ -16,12 +16,15 @@ class OtpService
 
     /**
      * Generate and send OTP to phone (WhatsApp) and email (if provided).
+     * registrationId is nullable — sendLoginOtp() below uses this same
+     * method with no registration attached, for the client portal login.
      */
     public function sendOtp(
         string $phoneNumber,
-        string $registrationId,
+        ?string $registrationId = null,
         ?string $email = null,
         ?string $name = null,
+        ?string $purpose = null,
     ): bool {
         // Invalidate any existing unverified OTPs for this number
         OtpVerification::where('phoneNumber', $phoneNumber)
@@ -38,8 +41,10 @@ class OtpService
             'expiresAt'      => now()->addMinutes(10),
         ]);
 
+        $action = $purpose === 'login' ? 'log-in' : 'verification';
+
         $whatsappMessage =
-            "Hello{$this->greeting($name)}, your NCSR verification code is:\n\n"
+            "Hello{$this->greeting($name)}, your NCSR {$action} code is:\n\n"
             . "*{$otp}*\n\n"
             . "This code expires in 10 minutes. "
             . "Do not share it with anyone.";
@@ -57,7 +62,7 @@ class OtpService
         // so the OTP still reaches the recipient.
         $smsSent = false;
         if (!$whatsappSent) {
-            $smsMessage = "Your NCSR verification code is {$otp}. It expires in 10 minutes. Do not share it with anyone.";
+            $smsMessage = "Your NCSR {$action} code is {$otp}. It expires in 10 minutes. Do not share it with anyone.";
             $smsSent = $this->bulkSms->send($phoneNumber, $smsMessage);
 
             if (!$smsSent) {
@@ -71,16 +76,16 @@ class OtpService
         if ($email) {
             $emailMessage =
                 "Hello{$this->greeting($name)},\n\n"
-                . "Your NCSR phone verification code is:\n\n"
+                . "Your NCSR {$action} code is:\n\n"
                 . "{$otp}\n\n"
-                . "Enter this code on the verification page to complete your registration.\n\n"
+                . "Enter this code to continue.\n\n"
                 . "This code expires in 10 minutes. Do not share it with anyone.\n\n"
-                . "If you did not register for cancer screening, please ignore this message.";
+                . "If you did not request this, please ignore this message.";
 
             $emailSent = $this->brevo->sendTransactional(
                 to: $email,
-                name: $name ?? 'Registrant',
-                subject: 'Your NCSR Verification Code — ' . $otp,
+                name: $name ?? 'there',
+                subject: 'Your NCSR ' . ($purpose === 'login' ? 'Login' : 'Verification') . ' Code — ' . $otp,
                 message: $emailMessage,
             );
 
@@ -95,12 +100,22 @@ class OtpService
         Log::info('OTP send result', [
             'phone'        => $phoneNumber,
             'email'        => $email ?? 'none',
+            'purpose'      => $purpose ?? 'registration',
             'whatsappSent' => $whatsappSent,
             'smsSent'      => $smsSent,
             'emailSent'    => $emailSent,
         ]);
 
         return $anySent;
+    }
+
+    /**
+     * Client portal login — no registrationId, since the client already
+     * has a Client record and isn't registering anything new.
+     */
+    public function sendLoginOtp(string $phoneNumber, ?string $email = null, ?string $name = null): bool
+    {
+        return $this->sendOtp($phoneNumber, null, $email, $name, 'login');
     }
 
     private function greeting(?string $name): string

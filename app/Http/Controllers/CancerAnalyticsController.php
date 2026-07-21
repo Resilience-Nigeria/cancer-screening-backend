@@ -32,7 +32,7 @@ class CancerAnalyticsController extends Controller
     private function hasNationalAccess($user): bool
     {
         $roleName = $user->user_role?->roleName ?? $user->role;
-        return in_array($roleName, ['SUPER_ADMIN', 'NICRAT_STAFF']);
+        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN']);
     }
 
     /**

@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
         'facility.scope' => \App\Http\Middleware\EnsureFacilityScope::class,
+        'client.auth' => \App\Http\Middleware\ClientTokenAuth::class,
     ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
