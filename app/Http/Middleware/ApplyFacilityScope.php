@@ -11,7 +11,7 @@ class ApplyFacilityScope
     /**
      * Handle an incoming request.
      *
-     * Apply facility scope for facility-level users (HOSPITAL_ADMIN, DATA_CLERK)
+     * Apply facility scope for facility-level users (NAVIGATOR, NURSE)
      */
     public function handle(Request $request, Closure $next): Response
     {

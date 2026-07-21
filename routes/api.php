@@ -45,6 +45,20 @@ Route::get('/areas', function (\Illuminate\Http\Request $request) {
 
 Route::post('/awareness/register', [AwarenessRegistrationController::class, 'store']);
 
+// ── Client Portal ────────────────────────────────────────────────────
+// Public: phone + OTP login (clients never set a password).
+Route::post('/client-portal/send-otp', [App\Http\Controllers\Api\ClientAuthController::class, 'sendOtp']);
+Route::post('/client-portal/verify-otp', [App\Http\Controllers\Api\ClientAuthController::class, 'verifyOtp']);
+
+// Protected: scoped strictly to the authenticated client's own record.
+Route::middleware('client.auth')->group(function () {
+    Route::post('/client-portal/logout', [App\Http\Controllers\Api\ClientAuthController::class, 'logout']);
+    Route::get('/client-portal/me', [App\Http\Controllers\Api\ClientPortalController::class, 'me']);
+    Route::get('/client-portal/risk-profile', [App\Http\Controllers\Api\ClientPortalController::class, 'riskProfile']);
+    Route::get('/client-portal/visits', [App\Http\Controllers\Api\ClientPortalController::class, 'visits']);
+    Route::get('/client-portal/outcome', [App\Http\Controllers\Api\ClientPortalController::class, 'outcome']);
+});
+
 Route::post('/otp/send',   [OtpController::class, 'send']);
 Route::post('/otp/verify', [OtpController::class, 'verify']);
 Route::post('/otp/resend', [OtpController::class, 'resend']);

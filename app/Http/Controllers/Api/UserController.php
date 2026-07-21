@@ -77,20 +77,20 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
         $currentUserRole = $currentUser->user_role?->roleName;
 
         // Filter users based on current user's role
-        if ($currentUserRole === 'SUPER_ADMIN') {
+        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
             $query->whereHas('user_role', function($q) {
-                $q->whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'DATA_CLERK']);
+                $q->whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'NURSE']);
             });
         } 
-        elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+        elseif ($currentUserRole === 'NAVIGATOR') {
             $query->where('facilityId', $currentUser->facilityId)
                   ->whereHas('user_role', function($q) {
-                      $q->where('roleName', 'DATA_CLERK');
+                      $q->where('roleName', 'NURSE');
                   });
         }
-        elseif ($currentUserRole === 'NICRAT_STAFF') {
+        elseif ($currentUserRole === 'NICRAT_ADMIN') {
             $query->whereHas('user_role', function($q) {
-                $q->whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'DATA_CLERK']);
+                $q->whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'NURSE']);
             });
         }
         else {
@@ -113,7 +113,7 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
 
         // Filter by facility
         if ($request->has('facility') && $request->facility !== 'all') {
-            if (in_array($currentUserRole, ['SUPER_ADMIN', 'NICRAT_STAFF'])) {
+            if (in_array($currentUserRole, ['NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN'])) {
                 $query->where('facilityId', $request->facility);
             }
         }
@@ -151,18 +151,18 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
         });
 
         // Calculate stats
-        if ($currentUserRole === 'SUPER_ADMIN') {
+        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
             $statsQuery = User::whereHas('user_role', function($q) {
-                $q->whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'DATA_CLERK']);
+                $q->whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'NURSE']);
             });
-        } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+        } elseif ($currentUserRole === 'NAVIGATOR') {
             $statsQuery = User::where('facilityId', $currentUser->facilityId)
                               ->whereHas('user_role', function($q) {
-                                  $q->where('roleName', 'DATA_CLERK');
+                                  $q->where('roleName', 'NURSE');
                               });
-        } elseif ($currentUserRole === 'NICRAT_STAFF') {
+        } elseif ($currentUserRole === 'NICRAT_ADMIN') {
             $statsQuery = User::whereHas('user_role', function($q) {
-                $q->whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'DATA_CLERK']);
+                $q->whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'NURSE']);
             });
         } else {
             $statsQuery = User::where('id', 0);
@@ -194,22 +194,22 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
         $currentUserRole = $currentUser->user_role?->roleName;
 
         // Check access based on role
-        if ($currentUserRole === 'SUPER_ADMIN') {
-            if ($user->user_role?->roleName === 'SUPER_ADMIN' && $user->id !== $currentUser->id) {
+        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
+            if ($user->user_role?->roleName === 'NICRAT_SUPER_ADMIN' && $user->id !== $currentUser->id) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Unauthorized access',
                 ], 403);
             }
-        } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+        } elseif ($currentUserRole === 'NAVIGATOR') {
             if ($user->facilityId !== $currentUser->facilityId) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Unauthorized access',
                 ], 403);
             }
-        } elseif ($currentUserRole === 'NICRAT_STAFF') {
-            if ($user->user_role?->roleName === 'SUPER_ADMIN') {
+        } elseif ($currentUserRole === 'NICRAT_ADMIN') {
+            if ($user->user_role?->roleName === 'NICRAT_SUPER_ADMIN') {
                 return response()->json([
                     'status' => false,
                     'message' => 'Unauthorized access',
@@ -290,8 +290,8 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
         $currentUserRole = $currentUser->user_role?->roleName;
 
         // Role-based validation
-        if ($currentUserRole === 'SUPER_ADMIN') {
-            $allowedRoles = ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'PARTNER'];
+        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
+            $allowedRoles = ['NICRAT_ADMIN', 'NAVIGATOR', 'PARTNER'];
             
             if (!in_array($roleBeingAssigned->roleName, $allowedRoles)) {
                 return response()->json([
@@ -300,15 +300,15 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
                 ], 403);
             }
 
-            if ($roleBeingAssigned->roleName === 'HOSPITAL_ADMIN' && !$request->facilityId) {
+            if ($roleBeingAssigned->roleName === 'NAVIGATOR' && !$request->facilityId) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Hospital administrators must be assigned to a facility',
                 ], 422);
             }
         } 
-        elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
-            if ($roleBeingAssigned->roleName !== 'DATA_CLERK') {
+        elseif ($currentUserRole === 'NAVIGATOR') {
+            if ($roleBeingAssigned->roleName !== 'NURSE') {
                 return response()->json([
                     'status' => false,
                     'message' => 'Hospital administrators can only create Data Clerks',
@@ -400,15 +400,15 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
         $currentUserRole = $currentUser->user_role?->roleName;
 
         // Role-based update validation
-        if ($currentUserRole === 'SUPER_ADMIN') {
-            if ($user->user_role?->roleName === 'SUPER_ADMIN' && $user->id !== $currentUser->id) {
+        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
+            if ($user->user_role?->roleName === 'NICRAT_SUPER_ADMIN' && $user->id !== $currentUser->id) {
                 return response()->json([
                     'status' => false,
                     'message' => 'You cannot edit other super administrators',
                 ], 403);
             }
         } 
-        elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+        elseif ($currentUserRole === 'NAVIGATOR') {
             if ($user->facilityId !== $currentUser->facilityId) {
                 return response()->json([
                     'status' => false,
@@ -418,7 +418,7 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
 
             if ($request->has('role')) {
                 $newRole = Role::where('roleId', $request->role)->first();
-                if (in_array($newRole?->roleName, ['SUPER_ADMIN', 'HOSPITAL_ADMIN', 'NICRAT_STAFF'])) {
+                if (in_array($newRole?->roleName, ['NICRAT_SUPER_ADMIN', 'NAVIGATOR', 'NICRAT_ADMIN'])) {
                     return response()->json([
                         'status' => false,
                         'message' => 'You cannot assign super admin, NICRAT staff, or hospital admin roles',
@@ -486,15 +486,15 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
         $currentUserRole = $currentUser->user_role?->roleName;
 
         // Role-based delete validation
-        if ($currentUserRole === 'SUPER_ADMIN') {
-            if ($user->user_role?->roleName === 'SUPER_ADMIN') {
+        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
+            if ($user->user_role?->roleName === 'NICRAT_SUPER_ADMIN') {
                 return response()->json([
                     'status' => false,
                     'message' => 'You cannot delete super administrators',
                 ], 403);
             }
         } 
-        elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+        elseif ($currentUserRole === 'NAVIGATOR') {
             if ($user->facilityId !== $currentUser->facilityId) {
                 return response()->json([
                     'status' => false,
@@ -502,7 +502,7 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
                 ], 403);
             }
 
-            if (in_array($user->user_role?->roleName, ['HOSPITAL_ADMIN', 'NICRAT_STAFF'])) {
+            if (in_array($user->user_role?->roleName, ['NAVIGATOR', 'NICRAT_ADMIN'])) {
                 return response()->json([
                     'status' => false,
                     'message' => 'You cannot delete hospital administrators or NICRAT staff',
@@ -540,10 +540,10 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
         $currentUser = Auth::user();
         $currentUserRole = $currentUser->user_role?->roleName;
 
-        if ($currentUserRole === 'SUPER_ADMIN') {
-            $roles = Role::whereIn('roleName', ['NICRAT_STAFF', 'HOSPITAL_ADMIN', 'PARTNER'])->get();
-        } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
-            $roles = Role::where('roleName', 'DATA_CLERK')->get();
+        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
+            $roles = Role::whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'PARTNER'])->get();
+        } elseif ($currentUserRole === 'NAVIGATOR') {
+            $roles = Role::where('roleName', 'NURSE')->get();
         } else {
             $roles = [];
         }
@@ -562,11 +562,11 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
         $currentUser = Auth::user();
         $currentUserRole = $currentUser->user_role?->roleName;
 
-        if ($currentUserRole === 'SUPER_ADMIN') {
+        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
             $facilities = Facility::where('status', 'active')
                 ->select('facilityId', 'facilityName', 'facilityCode')
                 ->get();
-        } elseif ($currentUserRole === 'HOSPITAL_ADMIN') {
+        } elseif ($currentUserRole === 'NAVIGATOR') {
             $facilities = Facility::where('facilityId', $currentUser->facilityId)
                 ->where('status', 'active')
                 ->select('facilityId', 'facilityName', 'facilityCode')
