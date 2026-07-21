@@ -194,6 +194,35 @@ class ClientController extends Controller
     ]);
 }
 
+/**
+ * Checks whether a phone number or email is already registered to a
+ * client, so Stage 2's biodata form can warn before creating a
+ * duplicate record. Returns each match with which field it hit.
+ */
+public function checkDuplicate(Request $request): JsonResponse
+{
+    $phone = trim((string) $request->query('phone', ''));
+    $email = trim((string) $request->query('email', ''));
+
+    $matches = [];
+
+    if ($phone) {
+        $byPhone = Client::where('phoneNumber', $phone)->first();
+        if ($byPhone) {
+            $matches[] = ['field' => 'phone', 'client' => $byPhone];
+        }
+    }
+
+    if ($email) {
+        $byEmail = Client::where('email', $email)->first();
+        if ($byEmail && (!$phone || $byEmail->clientId !== ($matches[0]['client']->clientId ?? null))) {
+            $matches[] = ['field' => 'email', 'client' => $byEmail];
+        }
+    }
+
+    return response()->json(['matches' => $matches]);
+}
+
 
 //  public function search(SearchClientRequest $request): JsonResponse
 //     {
