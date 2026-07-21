@@ -121,12 +121,14 @@ class User extends Authenticatable implements JWTSubject
 
    
     /**
-     * Check if user has national-level access (can see all facilities)
+     * Check if user has national-level access (can see all facilities).
+     * Driven entirely by the role's configured dataScopeType — not a
+     * hardcoded role-name list — so changing a role's scope in the
+     * database takes effect everywhere immediately.
      */
     public function hasNationalAccess(): bool
     {
-        $roleName = $this->user_role?->roleName;
-        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN']);
+        return $this->dataScopeType() === 'national';
     }
 
     /**
@@ -136,6 +138,74 @@ class User extends Authenticatable implements JWTSubject
     {
         $roleName = $this->user_role?->roleName;
         return in_array($roleName, ['NAVIGATOR', 'NURSE', 'DOCTOR']);
+    }
+
+    public function dataScopeType(): ?string
+    {
+        return $this->user_role?->dataScopeType;
+    }
+
+    /**
+     * The set of facility IDs this user can see, resolved from their
+     * role's configured dataScopeType and their own assigned facility.
+     * Returns null for "national" (no restriction — don't filter at
+     * all), otherwise an array to use with whereIn('facilityId', ...).
+     *
+     * Two users with the same role/scope type but different assigned
+     * facilities get different results here — the scope TYPE is
+     * role-level config, but the resolved facility SET is always
+     * relative to this specific user's own facility.
+     */
+    public function visibleFacilityIds(): ?array
+    {
+        $scope = $this->dataScopeType();
+
+        if ($scope === 'national' || $scope === null) {
+            // No scope configured on the role at all — fail open to
+            // "national" rather than silently locking everyone out,
+            // since that's almost always a missed-configuration bug
+            // rather than an intentional lockout.
+            return null;
+        }
+
+        $facility = $this->facility;
+
+        if (!$facility) {
+            return []; // No assigned facility — nothing to show.
+        }
+
+        return match ($scope) {
+            'state' => \App\Models\Facility::where('facilityState', $facility->facilityState)
+                ->pluck('facilityId')->toArray(),
+
+            'hub_hierarchy' => ($hub = $facility->findAncestorAtLevel('hub'))
+                ? $hub->descendantFacilityIds()
+                : [$facility->facilityId],
+
+            'subhub_hierarchy' => ($subhub = $facility->findAncestorAtLevel('subhub'))
+                ? $subhub->descendantFacilityIds()
+                : [$facility->facilityId],
+
+            'facility_only' => [$facility->facilityId],
+
+            default => [$facility->facilityId],
+        };
+    }
+
+    /**
+     * Single-record equivalent of visibleFacilityIds() — use this for
+     * authorization checks (e.g. "can this user open this visit?")
+     * rather than list filtering.
+     */
+    public function canAccessFacility(?int $facilityId): bool
+    {
+        if (!$facilityId) {
+            return false;
+        }
+
+        $visible = $this->visibleFacilityIds();
+
+        return $visible === null || in_array($facilityId, $visible, true);
     }
 
     /**

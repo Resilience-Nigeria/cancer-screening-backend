@@ -10,7 +10,7 @@ class Role extends Model
     use HasFactory;
     public $table = 'roles';
     protected $primaryKey = 'roleId';
-    protected $fillable = ['roleName', 'roleId', 'roleType'];
+    protected $fillable = ['roleName', 'roleId', 'roleType', 'roleDescription', 'dataScopeType'];
 
     public function permissions()
     {

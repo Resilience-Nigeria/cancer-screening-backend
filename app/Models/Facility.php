@@ -80,6 +80,61 @@ class Facility extends Model
     }
 
     /**
+     * Walk up the parent chain to find the nearest ancestor at the given
+     * tier (or this facility itself, if it's already that tier). Used to
+     * anchor "hub_hierarchy"/"subhub_hierarchy" data-scope resolution
+     * when a user's own facility is itself a Feeder or SubHub rather
+     * than the Hub/SubHub directly.
+     */
+    public function findAncestorAtLevel(string $level, int $maxDepth = 10): ?self
+    {
+        if ($this->facilityLevel === $level) {
+            return $this;
+        }
+
+        $facility = $this;
+        $depth = 0;
+
+        while ($facility->parentFacilityId && $depth < $maxDepth) {
+            $facility = $facility->parentFacility;
+            $depth++;
+
+            if (!$facility) {
+                return null;
+            }
+
+            if ($facility->facilityLevel === $level) {
+                return $facility;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * All facility IDs in this facility's subtree, including itself —
+     * e.g. a Hub's descendant IDs cover every SubHub and Feeder under it.
+     */
+    public function descendantFacilityIds(int $maxDepth = 10): array
+    {
+        $ids = [$this->facilityId];
+        $this->collectDescendantIds($ids, $maxDepth);
+        return $ids;
+    }
+
+    protected function collectDescendantIds(array &$ids, int $depthRemaining): void
+    {
+        if ($depthRemaining <= 0) {
+            return;
+        }
+
+        foreach ($this->childFacilities as $child) {
+            $ids[] = $child->facilityId;
+            $child->collectDescendantIds($ids, $depthRemaining - 1);
+        }
+    }
+
+    /**
      * Get users belonging to this facility
      */
     public function users(): HasMany

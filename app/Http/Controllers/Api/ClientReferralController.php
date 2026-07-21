@@ -45,11 +45,14 @@ class ClientReferralController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = auth('api')->user();
+        $visibleIds = $user->visibleFacilityIds();
 
         $referrals = ClientReferral::with(['client', 'fromFacility', 'toFacility'])
-            ->where(function ($q) use ($user) {
-                $q->where('toFacilityId', $user->facilityId)
-                  ->orWhere('fromFacilityId', $user->facilityId);
+            ->when($visibleIds !== null, function ($q) use ($visibleIds) {
+                $q->where(function ($inner) use ($visibleIds) {
+                    $inner->whereIn('toFacilityId', $visibleIds)
+                          ->orWhereIn('fromFacilityId', $visibleIds);
+                });
             })
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->type, fn($q) => $q->where('referralType', $request->type))

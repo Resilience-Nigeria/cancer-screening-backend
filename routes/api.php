@@ -157,6 +157,8 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
         // Users Management Routes
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/roles', [UserController::class, 'roles']);
+    Route::get('/roles', [App\Http\Controllers\Api\RoleController::class, 'index']);
+    Route::patch('/roles/{role}/scope', [App\Http\Controllers\Api\RoleController::class, 'updateScope']);
     Route::get('/users/facilities', [UserController::class, 'facilities']);
     Route::get('/users/{user}', [UserController::class, 'show']);
     Route::post('/users', [UserController::class, 'store']);

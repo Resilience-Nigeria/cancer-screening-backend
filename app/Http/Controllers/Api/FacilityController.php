@@ -15,7 +15,13 @@ class FacilityController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $user = auth('api')->user();
         $query = Facility::query();
+
+        $visibleIds = $user->visibleFacilityIds();
+        if ($visibleIds !== null) {
+            $query->whereIn('facilityId', $visibleIds);
+        }
 
         // Search
         if ($request->has('search')) {
@@ -81,15 +87,17 @@ class FacilityController extends Controller
             ];
         });
 
-        // Calculate stats
+        // Calculate stats — scoped the same way as the list above
+        $statsBase = fn () => Facility::when($visibleIds !== null, fn ($q) => $q->whereIn('facilityId', $visibleIds));
+
         $stats = [
-            'total' => Facility::count(),
-            'active' => Facility::where('status', 'active')->count(),
-            'inactive' => Facility::where('status', 'inactive')->count(),
-            'totalUsers' => \DB::table('users')->whereIn('facilityId', Facility::pluck('facilityId'))->count(),
-            'screeningCenters' => Facility::where('isScreeningCenter', true)->count(),
-            'treatmentCenters' => Facility::where('isTreatmentCenter', true)->count(),
-            'bothTypes' => Facility::where('isScreeningCenter', true)->where('isTreatmentCenter', true)->count(),
+            'total' => $statsBase()->count(),
+            'active' => $statsBase()->where('status', 'active')->count(),
+            'inactive' => $statsBase()->where('status', 'inactive')->count(),
+            'totalUsers' => \DB::table('users')->whereIn('facilityId', $statsBase()->pluck('facilityId'))->count(),
+            'screeningCenters' => $statsBase()->where('isScreeningCenter', true)->count(),
+            'treatmentCenters' => $statsBase()->where('isTreatmentCenter', true)->count(),
+            'bothTypes' => $statsBase()->where('isScreeningCenter', true)->where('isTreatmentCenter', true)->count(),
         ];
 
         return response()->json([

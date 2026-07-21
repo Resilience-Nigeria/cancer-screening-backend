@@ -202,7 +202,7 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
                 ], 403);
             }
         } elseif ($currentUserRole === 'NAVIGATOR') {
-            if ($user->facilityId !== $currentUser->facilityId) {
+            if (!$currentUser->canAccessFacility($user->facilityId)) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Unauthorized access',
@@ -409,7 +409,7 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
             }
         } 
         elseif ($currentUserRole === 'NAVIGATOR') {
-            if ($user->facilityId !== $currentUser->facilityId) {
+            if (!$currentUser->canAccessFacility($user->facilityId)) {
                 return response()->json([
                     'status' => false,
                     'message' => 'You can only edit users in your own facility',
@@ -495,7 +495,7 @@ private function sendWelcomeEmail(User $user, string $plainPassword): void
             }
         } 
         elseif ($currentUserRole === 'NAVIGATOR') {
-            if ($user->facilityId !== $currentUser->facilityId) {
+            if (!$currentUser->canAccessFacility($user->facilityId)) {
                 return response()->json([
                     'status' => false,
                     'message' => 'You can only delete users in your own facility',
