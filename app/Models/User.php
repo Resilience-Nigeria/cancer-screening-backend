@@ -110,6 +110,18 @@ class User extends Authenticatable implements JWTSubject
         return $this->user_role?->roleName === 'DOCTOR';
     }
 
+    /**
+     * The genuinely new "Hospital Admin" role — NOT the same as
+     * isHospitalAdmin() above, which is a legacy-named alias for
+     * NAVIGATOR left over from an earlier role rename. Hospital Admin
+     * and Navigator are functionally equivalent for staff-management
+     * purposes (see UserController) but are distinct role identities.
+     */
+    public function isHospitalAdminRole(): bool
+    {
+        return $this->user_role?->roleName === 'HOSPITAL_ADMIN';
+    }
+
     // Clearer aliases matching the current role names — the isX() methods
     // above are kept as-is so existing call sites aren't broken by a
     // rename; new code should prefer these.
@@ -146,7 +158,7 @@ class User extends Authenticatable implements JWTSubject
     public function hasFacilityAccess(): bool
     {
         $roleName = $this->user_role?->roleName;
-        return in_array($roleName, ['NAVIGATOR', 'NURSE', 'DOCTOR']);
+        return in_array($roleName, ['NAVIGATOR', 'HOSPITAL_ADMIN', 'NURSE', 'DOCTOR']);
     }
 
     public function dataScopeType(): ?string
@@ -227,21 +239,21 @@ class User extends Authenticatable implements JWTSubject
     public function canCreateUsers(): bool
     {
         $roleName = $this->user_role?->roleName;
-        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NAVIGATOR']);
+        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN']);
     }
 
     /**
      * Get roles this user can create
-     * NICRAT_SUPER_ADMIN can create: NICRAT_ADMIN, NAVIGATOR, PARTNER
-     * NAVIGATOR can create: NURSE, DOCTOR
+     * NICRAT_SUPER_ADMIN can create: NICRAT_ADMIN, NAVIGATOR, HOSPITAL_ADMIN, PARTNER
+     * NAVIGATOR / HOSPITAL_ADMIN can create: NURSE, DOCTOR
      */
     public function getRolesCanCreate(): array
     {
         if ($this->isSuperAdmin()) {
-            return Role::whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'PARTNER'])->get()->toArray();
+            return Role::whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN', 'PARTNER'])->get()->toArray();
         }
 
-        if ($this->isHospitalAdmin()) {
+        if ($this->isHospitalAdmin() || $this->isHospitalAdminRole()) {
             return Role::whereIn('roleName', ['NURSE', 'DOCTOR'])->get()->toArray();
         }
 
