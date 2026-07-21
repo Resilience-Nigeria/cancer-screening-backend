@@ -9,17 +9,29 @@ use Illuminate\Support\Facades\Log;
 
 class FacilityService
 {
-    public function findNearestScreeningFacility(
-        string $state,
-        string $lga,
-        ?string $area = null,
-    ): ?Facility {
-        // ── Step 1: Exact LGA + state match ──────────────────────────
-        $exact = Facility::whereJsonContains('facilityType', 'sub_hub')
-            ->where('isActive', true)
-            ->where('facilityState', $state)
-            ->where('facilityLga', $lga)
-            ->first();
+    /**
+     * Find the nearest screening facility — any tier (Feeder, SubHub, or
+     * Hub) can be a screening center, so this matches on the
+     * isScreeningCenter flag rather than a specific hierarchy level.
+     *
+     * Priority:
+     * 1. Exact LGA match in same state
+     * 2. Nearest facility in same state by coordinates
+     * 3. Nearest facility in any state within radius (cross-state)
+     * 4. Any facility in same state (no-coordinates fallback)
+     * 5. null
+     */
+  public function findNearestScreeningFacility(
+    string $state,
+    string $lga,
+    ?string $area = null,   // 👈 new optional parameter
+): ?Facility {
+    // ── Step 1: Exact LGA + state match ──────────────────────────────
+    $exact = Facility::where('isScreeningCenter', true)
+        ->where('isActive', true)
+        ->where('facilityState', $state)
+        ->where('facilityLga', $lga)
+        ->first();
 
         if ($exact) {
             Log::info('Facility: exact LGA match', [
@@ -69,11 +81,11 @@ class FacilityService
             $clientLat = (float) $coords->latitude;
             $clientLng = (float) $coords->longitude;
 
-            $allFacilities = Facility::whereJsonContains('facilityType', 'sub_hub')
-                ->where('isActive', true)
-                ->whereNotNull('latitude')
-                ->whereNotNull('longitude')
-                ->get();
+        $allFacilities = Facility::where('isScreeningCenter', true)
+            ->where('isActive', true)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->get();
 
             if ($allFacilities->isNotEmpty()) {
                 $nearest = $allFacilities
@@ -101,11 +113,11 @@ class FacilityService
             }
         }
 
-        // ── Step 3: No coordinates — same state fallback ───────────────
-        $fallback = Facility::whereJsonContains('facilityType', 'sub_hub')
-            ->where('isActive', true)
-            ->where('facilityState', $state)
-            ->first();
+    // ── Step 3: No coordinates — same state fallback ──────────────────
+    $fallback = Facility::where('isScreeningCenter', true)
+        ->where('isActive', true)
+        ->where('facilityState', $state)
+        ->first();
 
         if ($fallback) {
             Log::info('Facility: state-level fallback', [
@@ -121,33 +133,35 @@ class FacilityService
             'area'  => $area,
         ]);
 
-        return null;
-    }
+    return null;
+}
 
 
 
     /**
-     * Find the nearest secondary or tertiary facility for referral —
-     * used when a Stage 2 screening outcome is "suspicious" or
-     * "urgent_referral" and the client needs to be linked onward for
-     * confirmation/diagnostic workup or treatment.
+     * Find the nearest SubHub or Hub facility for referral — used when a
+     * Stage 2 screening outcome is "suspicious" or "urgent_referral" and
+     * the client needs to be linked onward for confirmation/diagnostic
+     * workup or treatment. Feeders are excluded here since escalation
+     * always goes up the hierarchy (Feeder -> SubHub -> Hub), never to
+     * another Feeder.
      *
      * Same priority order as findNearestScreeningFacility, but filtered
-     * to facilityLevel in [secondary, tertiary] instead of sub-hub type.
+     * to facilityLevel in [subhub, hub] instead of sub-hub type.
      */
     public function findNearestReferralFacility(
         string $state,
         string $lga,
         ?string $area = null,
     ): ?Facility {
-        $levelFilter = fn ($q) => $q->whereIn('facilityLevel', ['secondary', 'tertiary']);
+        $levelFilter = fn ($q) => $q->whereIn('facilityLevel', ['subhub', 'hub']);
 
         // ── Step 1: Exact LGA + state match ──────────────────────────
         $exact = Facility::where($levelFilter)
             ->where('isActive', true)
             ->where('facilityState', $state)
             ->where('facilityLga', $lga)
-            ->orderByRaw("FIELD(facilityLevel, 'tertiary', 'secondary')")
+            ->orderByRaw("FIELD(facilityLevel, 'hub', 'subhub')")
             ->first();
 
         if ($exact) {
@@ -211,7 +225,7 @@ class FacilityService
         $fallback = Facility::where($levelFilter)
             ->where('isActive', true)
             ->where('facilityState', $state)
-            ->orderByRaw("FIELD(facilityLevel, 'tertiary', 'secondary')")
+            ->orderByRaw("FIELD(facilityLevel, 'hub', 'subhub')")
             ->first();
 
         if ($fallback) {
@@ -219,7 +233,7 @@ class FacilityService
             return $fallback;
         }
 
-        Log::warning('Referral facility: no active secondary/tertiary match found', [
+        Log::warning('Referral facility: no active SubHub/Hub match found', [
             'state' => $state,
             'lga' => $lga,
             'area' => $area,
