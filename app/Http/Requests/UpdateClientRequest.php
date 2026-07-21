@@ -38,6 +38,7 @@ class UpdateClientRequest extends FormRequest
             'stateOfResidence' => ['nullable', 'string', 'max:255'],
             'lgaOfResidence' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:300'],
+            'landmark' => ['nullable', 'string', 'max:300'],
             'occupation' => ['nullable', 'string', 'max:255'],
             'nextOfKinName' => ['nullable', 'string', 'max:255'],
             'nextOfKinPhone' => ['nullable', 'string', 'max:30'],
