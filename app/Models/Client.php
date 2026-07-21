@@ -85,6 +85,11 @@ protected $keyType = 'string';
         return $this->hasOne(CaseOutcome::class, 'clientId');
     }
 
+    public function diagnosticEvaluations(): HasMany
+    {
+        return $this->hasMany(DiagnosticEvaluation::class, 'clientId', 'clientId');
+    }
+
     public function getAgeAttribute(): ?int
     {
         return $this->dateOfBirth ? Carbon::parse($this->dateOfBirth)->age : null;
