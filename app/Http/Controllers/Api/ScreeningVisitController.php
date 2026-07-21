@@ -203,7 +203,7 @@ class ScreeningVisitController extends Controller
     public function classifyOutcome(
         StoreOutcomeClassificationRequest $request,
         ScreeningVisit $visit,
-        \App\Services\FacilityService $facilityService,
+        \App\Services\ReferralRoutingService $referralRouting,
         \App\Services\ReferralService $referralService,
     ): JsonResponse {
         $this->authorizeVisit($visit);
@@ -215,24 +215,31 @@ class ScreeningVisitController extends Controller
         ]);
 
         $referral = null;
+        $isSelfReferral = false;
 
-        // Auto-link to a secondary/tertiary facility when the outcome
-        // warrants it, so the client isn't left without a next step.
+        // Route to Stage 3 (confirmation/diagnostic workup) when the
+        // outcome warrants it. Resolution follows the facility hierarchy
+        // (parentFacilityId) and each facility's configured
+        // stagesSupported — not a hardcoded tier assumption — so if the
+        // Stage 2 facility itself is Stage 3-capable, the client simply
+        // continues there instead of being sent elsewhere.
         if (in_array($visit->overallOutcome, ['suspicious', 'urgent_referral'], true)) {
             $client = $visit->client;
             $fromFacility = $visit->facility;
 
-            if ($client && $fromFacility && $client->stateOfResidence && $client->lgaOfResidence) {
-                $toFacility = $facilityService->findNearestReferralFacility(
-                    $client->stateOfResidence,
-                    $client->lgaOfResidence,
-                );
+            if ($client && $fromFacility) {
+                $resolution = $referralRouting->resolveForStage($fromFacility, 'stage3');
+                $toFacility = $resolution['facility'];
+                $isSelfReferral = $resolution['isSelfReferral'];
 
-                // Don't create a referral to the same facility the client is already at.
-                if ($toFacility && $toFacility->facilityId !== $fromFacility->facilityId) {
+                if ($toFacility) {
                     $urgencyNote = $visit->overallOutcome === 'urgent_referral'
                         ? 'URGENT — same-day referral required.'
                         : 'Referred following a suspicious Stage 2 screening outcome.';
+
+                    if ($isSelfReferral) {
+                        $urgencyNote .= ' This facility is Stage 3-capable — client continues here, no physical transfer needed.';
+                    }
 
                     $referral = $referralService->referToMainHub(
                         $client,
@@ -248,6 +255,7 @@ class ScreeningVisitController extends Controller
         return response()->json([
             'message' => 'Screening outcome recorded successfully',
             'visit' => $visit,
+            'isSelfReferral' => $isSelfReferral,
             'referral' => $referral,
         ]);
     }
