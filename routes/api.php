@@ -83,6 +83,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/clients/{client}', [ClientController::class, 'show']);
     Route::patch('/clients/{client}', [ClientController::class, 'update']);
     Route::get('/clients/search/details', [ClientController::class, 'search']);
+    Route::get('/clients/check-duplicate', [ClientController::class, 'checkDuplicate']);
 
     Route::get('/clients/{client}/risk-profile', [RiskProfileController::class, 'show']);
     Route::post('/clients/{client}/risk-profile', [RiskProfileController::class, 'upsert']);
