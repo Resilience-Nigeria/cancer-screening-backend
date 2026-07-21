@@ -23,12 +23,13 @@ class DashboardController extends Controller
     }
 
     /**
-     * Check if user has national access
+     * Check if user has national access — delegates entirely to the
+     * User model, which reads this from the role's configured
+     * dataScopeType. No hardcoded role list here anymore.
      */
     private function hasNationalAccess($user): bool
     {
-        $roleName = $user->user_role?->roleName ?? $user->role;
-        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN', 'PARTNER']);
+        return $user->hasNationalAccess();
     }
 
     /**
@@ -47,8 +48,8 @@ class DashboardController extends Controller
 
             // Apply RBAC filters
             if (!$hasNationalAccess) {
-                $clientsQuery->where('facilityId', $user->facilityId);
-                $visitsQuery->where('clients.facilityId', $user->facilityId);
+                $clientsQuery->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
+                $visitsQuery->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } else {
                 // Apply optional filters for national users
                 if ($request->has('facilityId') && $request->facilityId !== 'all') {
@@ -79,7 +80,7 @@ class DashboardController extends Controller
                 ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId');
                 
             if (!$hasNationalAccess) {
-                $pendingFollowUpsQuery->where('clients.facilityId', $user->facilityId);
+                $pendingFollowUpsQuery->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
                 $pendingFollowUpsQuery->where('clients.facilityId', $request->facilityId);
             }
@@ -102,7 +103,7 @@ class DashboardController extends Controller
                 ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId');
                 
             if (!$hasNationalAccess) {
-                $referralAlertsQuery->where('clients.facilityId', $user->facilityId);
+                $referralAlertsQuery->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
                 $referralAlertsQuery->where('clients.facilityId', $request->facilityId);
             }
@@ -127,7 +128,7 @@ class DashboardController extends Controller
                 ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId');
                 
             if (!$hasNationalAccess) {
-                $positiveFindingsQuery->where('clients.facilityId', $user->facilityId);
+                $positiveFindingsQuery->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
                 $positiveFindingsQuery->where('clients.facilityId', $request->facilityId);
             }
@@ -184,7 +185,7 @@ class DashboardController extends Controller
                 ->join('clients', 'screening_visits.clientId', '=', 'clients.clientId');
 
             if (!$hasNationalAccess) {
-                $query->where('clients.facilityId', $user->facilityId);
+                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } else {
                 if ($request->has('facilityId') && $request->facilityId !== 'all') {
                     $query->where('clients.facilityId', $request->facilityId);
@@ -246,7 +247,7 @@ class DashboardController extends Controller
 
             // Apply RBAC filters
             if (!$hasNationalAccess) {
-                $query->where('clients.facilityId', $user->facilityId);
+                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } else {
                 if ($request->has('facilityId') && $request->facilityId !== 'all') {
                     $query->where('clients.facilityId', $request->facilityId);
@@ -301,7 +302,7 @@ class DashboardController extends Controller
 
             // Apply RBAC filters
             if (!$hasNationalAccess) {
-                $query->where('clients.facilityId', $user->facilityId);
+                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } else {
                 if ($request->has('facilityId') && $request->facilityId !== 'all') {
                     $query->where('clients.facilityId', $request->facilityId);
@@ -347,7 +348,7 @@ class DashboardController extends Controller
             $query = \App\Models\CaseOutcome::with('client')
                 ->whereHas('client', function($q) use ($user, $hasNationalAccess) {
                     if (!$hasNationalAccess) {
-                        $q->where('facilityId', $user->facilityId);
+                        $q->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
                     }
                 });
             
@@ -412,7 +413,7 @@ class DashboardController extends Controller
             $query = $modelClass::with(['visit.client'])
                 ->whereHas('visit.client', function($q) use ($user, $hasNationalAccess) {
                     if (!$hasNationalAccess) {
-                        $q->where('facilityId', $user->facilityId);
+                        $q->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
                     }
                 });
 
@@ -489,7 +490,7 @@ class DashboardController extends Controller
             $query = \App\Models\CaseOutcome::with('client')
                 ->whereHas('client', function($q) use ($user, $hasNationalAccess) {
                     if (!$hasNationalAccess) {
-                        $q->where('facilityId', $user->facilityId);
+                        $q->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
                     }
                 });
             
@@ -554,7 +555,7 @@ private function getReferredClientsCount($user, Request $request, bool $hasNatio
                 ->where($table . '.treatmentReferral', '!=', '');
 
             if (!$hasNationalAccess) {
-                $query->where('clients.facilityId', $user->facilityId);
+                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } else {
                 if ($request->has('facilityId') && $request->facilityId !== 'all') {
                     $query->where('clients.facilityId', $request->facilityId);
@@ -623,7 +624,7 @@ public function getReferredClients(Request $request): JsonResponse
                     );
 
                 if (!$hasNationalAccess) {
-                    $query->where('clients.facilityId', $user->facilityId);
+                    $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
                 } else {
                     if ($request->has('facilityId') && $request->facilityId !== 'all') {
                         $query->where('clients.facilityId', $request->facilityId);
@@ -727,7 +728,7 @@ public function allScreenings(Request $request): JsonResponse
             ]);
 
         if (!$hasNationalAccess) {
-            $visitsQuery->where('clients.facilityId', $user->facilityId);
+            $visitsQuery->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
         } else {
             if ($request->has('facilityId') && $request->facilityId !== 'all') {
                 $visitsQuery->where('clients.facilityId', $request->facilityId);

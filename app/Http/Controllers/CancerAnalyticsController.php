@@ -27,12 +27,13 @@ class CancerAnalyticsController extends Controller
     ];
 
     /**
-     * Check if user has national access
+     * Check if user has national access — delegates entirely to the
+     * User model, which reads this from the role's configured
+     * dataScopeType. No hardcoded role list here anymore.
      */
     private function hasNationalAccess($user): bool
     {
-        $roleName = $user->user_role?->roleName ?? $user->role;
-        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN']);
+        return $user->hasNationalAccess();
     }
 
     /**
@@ -83,7 +84,7 @@ class CancerAnalyticsController extends Controller
 
             // Apply RBAC filters
             if (!$hasNationalAccess) {
-                $query->where('clients.facilityId', $user->facilityId);
+                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } else {
                 if ($request->has('facilityId') && $request->facilityId !== 'all') {
                     $query->where('clients.facilityId', $request->facilityId);
@@ -246,7 +247,7 @@ class CancerAnalyticsController extends Controller
 
             // Apply RBAC
             if (!$hasNationalAccess) {
-                $query->where('clients.facilityId', $user->facilityId);
+                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             } else {
                 if ($request->has('facilityId') && $request->facilityId !== 'all') {
                     $query->where('clients.facilityId', $request->facilityId);
@@ -311,7 +312,7 @@ class CancerAnalyticsController extends Controller
                 ->select(['clients.dateOfBirth', 'clients.gender']);
 
             if (!$hasNationalAccess) {
-                $query->where('clients.facilityId', $user->facilityId);
+                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
             }
 
             $cases = $query->get();
@@ -365,7 +366,7 @@ class CancerAnalyticsController extends Controller
                 ->whereNotNull('overallOutcome');
 
             if (!$hasNationalAccess) {
-                $query->where('facilityId', $user->facilityId);
+                $query->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
             } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
                 $query->where('facilityId', $request->facilityId);
             }
@@ -420,7 +421,7 @@ class CancerAnalyticsController extends Controller
                 ->select('facilities.facilityId', 'facilities.facilityName', DB::raw('count(*) as screeningsCount'));
 
             if (!$hasNationalAccess) {
-                $screeningsQuery->where('facilities.facilityId', $user->facilityId);
+                $screeningsQuery->whereIn('facilities.facilityId', $user->visibleFacilityIds() ?? []);
             } elseif ($request->filled('facilityId') && $request->facilityId !== 'all') {
                 $screeningsQuery->where('facilities.facilityId', $request->facilityId);
             }
@@ -440,7 +441,7 @@ class CancerAnalyticsController extends Controller
                 ->join('facilities', 'client_referrals.fromFacilityId', '=', 'facilities.facilityId')
                 ->select('facilities.facilityId', DB::raw('count(*) as referralsCount'));
             if (!$hasNationalAccess) {
-                $referralsQuery->where('facilities.facilityId', $user->facilityId);
+                $referralsQuery->whereIn('facilities.facilityId', $user->visibleFacilityIds() ?? []);
             }
             $referrals = $referralsQuery->groupBy('facilities.facilityId')->get()->keyBy('facilityId');
 
@@ -448,7 +449,7 @@ class CancerAnalyticsController extends Controller
                 ->whereIn('overallOutcome', ['suspicious', 'urgent_referral'])
                 ->select('facilityId', DB::raw('count(*) as flaggedCount'));
             if (!$hasNationalAccess) {
-                $flaggedQuery->where('facilityId', $user->facilityId);
+                $flaggedQuery->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
             }
             $flagged = $flaggedQuery->groupBy('facilityId')->get()->keyBy('facilityId');
 
@@ -550,13 +551,13 @@ class CancerAnalyticsController extends Controller
 
             $regToScreen = DB::table('clients')
                 ->join('screening_visits', 'clients.clientId', '=', 'screening_visits.clientId')
-                ->when(!$hasNationalAccess, fn ($q) => $q->where('clients.facilityId', $user->facilityId))
+                ->when(!$hasNationalAccess, fn ($q) => $q->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []))
                 ->selectRaw('AVG(DATEDIFF(screening_visits.visitDate, clients.registrationDate)) as avgDays')
                 ->first();
 
             $regToReferral = DB::table('client_referrals')
                 ->join('clients', 'client_referrals.clientId', '=', 'clients.clientId')
-                ->when(!$hasNationalAccess, fn ($q) => $q->where('clients.facilityId', $user->facilityId))
+                ->when(!$hasNationalAccess, fn ($q) => $q->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []))
                 ->selectRaw('AVG(DATEDIFF(client_referrals.referralDate, clients.registrationDate)) as avgDays')
                 ->first();
 
@@ -564,7 +565,7 @@ class CancerAnalyticsController extends Controller
                 ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
                 ->whereNotNull('diagnosisDate')
                 ->whereNotNull('treatmentCommencementDate')
-                ->when(!$hasNationalAccess, fn ($q) => $q->where('clients.facilityId', $user->facilityId))
+                ->when(!$hasNationalAccess, fn ($q) => $q->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []))
                 ->selectRaw('AVG(DATEDIFF(treatmentCommencementDate, diagnosisDate)) as avgDays')
                 ->first();
 

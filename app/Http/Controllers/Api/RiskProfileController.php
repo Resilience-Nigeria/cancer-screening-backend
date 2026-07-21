@@ -59,7 +59,7 @@ class RiskProfileController extends Controller
     {
         $user = auth('api')->user();
 
-        if (!$user->isSuperAdmin() && !$user->isPartner() && $client->facilityId !== $user->facilityId) {
+        if (!$user->canAccessFacility($client->facilityId)) {
             abort(403, 'You cannot access this client');
         }
     }
