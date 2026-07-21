@@ -65,6 +65,7 @@ class FacilityController extends Controller
                 'phoneNumber' => $facility->phoneNumber,
                 'email' => $facility->email,
                 'status' => $facility->status,
+                'facilityLevel' => $facility->facilityLevel,
                 'isScreeningCenter' => $facility->isScreeningCenter,
                 'isTreatmentCenter' => $facility->isTreatmentCenter,
                 'facilityTypes' => $facility->facility_types,
@@ -111,6 +112,7 @@ class FacilityController extends Controller
                 'phoneNumber' => $facility->phoneNumber,
                 'email' => $facility->email,
                 'status' => $facility->status,
+                'facilityLevel' => $facility->facilityLevel,
                 'isScreeningCenter' => $facility->isScreeningCenter,
                 'isTreatmentCenter' => $facility->isTreatmentCenter,
                 'facilityTypes' => $facility->facility_types,
@@ -137,6 +139,7 @@ class FacilityController extends Controller
             'phoneNumber' => 'required|string|max:20',
             'email' => 'required|email|max:255|unique:facilities,email',
             'status' => 'sometimes|in:active,inactive',
+            'facilityLevel' => 'required|in:feeder,subhub,hub',
             'isScreeningCenter' => 'sometimes|boolean',
             'isTreatmentCenter' => 'sometimes|boolean',
         ]);
@@ -160,6 +163,15 @@ class FacilityController extends Controller
             ], 422);
         }
 
+        // Only a Hub may also be a treatment center — SubHubs and Feeders
+        // are screening-only in this referral hierarchy.
+        if ($isTreatment && $request->input('facilityLevel') !== 'hub') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Only a Hub facility can be a Treatment Center. SubHub and Feeder facilities are screening-only.',
+            ], 422);
+        }
+
         $facility = Facility::create([
             'facilityName' => $request->facilityName,
             'facilityCode' => $request->facilityCode,
@@ -169,6 +181,7 @@ class FacilityController extends Controller
             'phoneNumber' => $request->phoneNumber,
             'email' => $request->email,
             'status' => $request->status ?? 'active',
+            'facilityLevel' => $request->facilityLevel,
             'isScreeningCenter' => $isScreening,
             'isTreatmentCenter' => $isTreatment,
         ]);
@@ -186,6 +199,7 @@ class FacilityController extends Controller
                 'phoneNumber' => $facility->phoneNumber,
                 'email' => $facility->email,
                 'status' => $facility->status,
+                'facilityLevel' => $facility->facilityLevel,
                 'isScreeningCenter' => $facility->isScreeningCenter,
                 'isTreatmentCenter' => $facility->isTreatmentCenter,
                 'facilityTypes' => $facility->facility_types,
@@ -207,6 +221,7 @@ class FacilityController extends Controller
             'phoneNumber' => 'sometimes|required|string|max:20',
             'email' => 'sometimes|required|email|max:255|unique:facilities,email,' . $facility->facilityId . ',facilityId',
             'status' => 'sometimes|in:active,inactive',
+            'facilityLevel' => 'sometimes|required|in:feeder,subhub,hub',
             'isScreeningCenter' => 'sometimes|boolean',
             'isTreatmentCenter' => 'sometimes|boolean',
         ]);
@@ -230,6 +245,22 @@ class FacilityController extends Controller
                     'message' => 'Facility must be at least one type (Screening Center or Treatment Center)',
                 ], 422);
             }
+
+            // Only a Hub may also be a treatment center.
+            $resolvedLevel = $request->input('facilityLevel', $facility->facilityLevel);
+            if ($isTreatment && $resolvedLevel !== 'hub') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Only a Hub facility can be a Treatment Center. SubHub and Feeder facilities are screening-only.',
+                ], 422);
+            }
+        } elseif ($request->has('facilityLevel') && $request->facilityLevel !== 'hub' && $facility->isTreatmentCenter) {
+            // Changing an existing Hub down to SubHub/Feeder while it's
+            // still marked as a treatment center — same rule applies.
+            return response()->json([
+                'status' => false,
+                'message' => 'This facility is a Treatment Center, so its level cannot be changed away from Hub. Unset Treatment Center first.',
+            ], 422);
         }
 
         $facility->update($request->only([
@@ -241,6 +272,7 @@ class FacilityController extends Controller
             'phoneNumber',
             'email',
             'status',
+            'facilityLevel',
             'isScreeningCenter',
             'isTreatmentCenter',
         ]));
@@ -258,6 +290,7 @@ class FacilityController extends Controller
                 'phoneNumber' => $facility->phoneNumber,
                 'email' => $facility->email,
                 'status' => $facility->status,
+                'facilityLevel' => $facility->facilityLevel,
                 'isScreeningCenter' => $facility->isScreeningCenter,
                 'isTreatmentCenter' => $facility->isTreatmentCenter,
                 'facilityTypes' => $facility->facility_types,
