@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Facility extends Model
 {
@@ -25,6 +26,8 @@ class Facility extends Model
         'isTreatmentCenter',
         'facilityType',
         'facilityLevel',
+        'parentFacilityId',
+        'stagesSupported',
         'navigatorName',
         'navigatorPhone',
         'navigatorEmail',
@@ -37,8 +40,38 @@ class Facility extends Model
         'isScreeningCenter' => 'boolean',
         'isTreatmentCenter' => 'boolean',
         'facilityType' => 'array',
+        'stagesSupported' => 'array',
         'isActive' => 'boolean',
     ];
+
+    /**
+     * The facility this one refers up to (a Feeder's parent is its
+     * SubHub, a SubHub's parent is its Hub). Null for a top-level Hub.
+     */
+    public function parentFacility(): BelongsTo
+    {
+        return $this->belongsTo(Facility::class, 'parentFacilityId', 'facilityId');
+    }
+
+    /**
+     * Facilities that refer up to this one.
+     */
+    public function childFacilities(): HasMany
+    {
+        return $this->hasMany(Facility::class, 'parentFacilityId', 'facilityId');
+    }
+
+    /**
+     * Whether this facility is configured to handle a given journey
+     * stage (e.g. 'stage2', 'stage3'). Driven entirely by the
+     * stagesSupported column — not inferred from facilityLevel — so an
+     * admin can configure any facility's capabilities without a
+     * code change.
+     */
+    public function supportsStage(string $stage): bool
+    {
+        return in_array($stage, $this->stagesSupported ?? [], true);
+    }
 
     /**
      * Get users belonging to this facility

@@ -66,6 +66,8 @@ class FacilityController extends Controller
                 'email' => $facility->email,
                 'status' => $facility->status,
                 'facilityLevel' => $facility->facilityLevel,
+                'parentFacilityId' => $facility->parentFacilityId,
+                'stagesSupported' => $facility->stagesSupported,
                 'isScreeningCenter' => $facility->isScreeningCenter,
                 'isTreatmentCenter' => $facility->isTreatmentCenter,
                 'facilityTypes' => $facility->facility_types,
@@ -113,6 +115,8 @@ class FacilityController extends Controller
                 'email' => $facility->email,
                 'status' => $facility->status,
                 'facilityLevel' => $facility->facilityLevel,
+                'parentFacilityId' => $facility->parentFacilityId,
+                'stagesSupported' => $facility->stagesSupported,
                 'isScreeningCenter' => $facility->isScreeningCenter,
                 'isTreatmentCenter' => $facility->isTreatmentCenter,
                 'facilityTypes' => $facility->facility_types,
@@ -140,6 +144,9 @@ class FacilityController extends Controller
             'email' => 'required|email|max:255|unique:facilities,email',
             'status' => 'sometimes|in:active,inactive',
             'facilityLevel' => 'required|in:feeder,subhub,hub',
+            'parentFacilityId' => 'nullable|integer|exists:facilities,facilityId',
+            'stagesSupported' => 'nullable|array',
+            'stagesSupported.*' => 'string|in:stage2,stage3,stage4',
             'isScreeningCenter' => 'sometimes|boolean',
             'isTreatmentCenter' => 'sometimes|boolean',
         ]);
@@ -172,6 +179,16 @@ class FacilityController extends Controller
             ], 422);
         }
 
+        // Enforce the hierarchy shape: a Feeder's parent must be a SubHub,
+        // a SubHub's parent must be a Hub. Hubs sit at the top and have
+        // no parent.
+        if ($request->filled('parentFacilityId')) {
+            $parentError = $this->validateParentTier($request->facilityLevel, $request->parentFacilityId);
+            if ($parentError) {
+                return response()->json(['status' => false, 'message' => $parentError], 422);
+            }
+        }
+
         $facility = Facility::create([
             'facilityName' => $request->facilityName,
             'facilityCode' => $request->facilityCode,
@@ -182,6 +199,8 @@ class FacilityController extends Controller
             'email' => $request->email,
             'status' => $request->status ?? 'active',
             'facilityLevel' => $request->facilityLevel,
+            'parentFacilityId' => $request->parentFacilityId,
+            'stagesSupported' => $request->stagesSupported ?? ['stage2'],
             'isScreeningCenter' => $isScreening,
             'isTreatmentCenter' => $isTreatment,
         ]);
@@ -200,6 +219,8 @@ class FacilityController extends Controller
                 'email' => $facility->email,
                 'status' => $facility->status,
                 'facilityLevel' => $facility->facilityLevel,
+                'parentFacilityId' => $facility->parentFacilityId,
+                'stagesSupported' => $facility->stagesSupported,
                 'isScreeningCenter' => $facility->isScreeningCenter,
                 'isTreatmentCenter' => $facility->isTreatmentCenter,
                 'facilityTypes' => $facility->facility_types,
@@ -222,6 +243,9 @@ class FacilityController extends Controller
             'email' => 'sometimes|required|email|max:255|unique:facilities,email,' . $facility->facilityId . ',facilityId',
             'status' => 'sometimes|in:active,inactive',
             'facilityLevel' => 'sometimes|required|in:feeder,subhub,hub',
+            'parentFacilityId' => 'nullable|integer|exists:facilities,facilityId|not_in:' . $facility->facilityId,
+            'stagesSupported' => 'nullable|array',
+            'stagesSupported.*' => 'string|in:stage2,stage3,stage4',
             'isScreeningCenter' => 'sometimes|boolean',
             'isTreatmentCenter' => 'sometimes|boolean',
         ]);
@@ -263,6 +287,14 @@ class FacilityController extends Controller
             ], 422);
         }
 
+        if ($request->filled('parentFacilityId')) {
+            $resolvedLevel = $request->input('facilityLevel', $facility->facilityLevel);
+            $parentError = $this->validateParentTier($resolvedLevel, $request->parentFacilityId);
+            if ($parentError) {
+                return response()->json(['status' => false, 'message' => $parentError], 422);
+            }
+        }
+
         $facility->update($request->only([
             'facilityName',
             'facilityCode',
@@ -273,6 +305,8 @@ class FacilityController extends Controller
             'email',
             'status',
             'facilityLevel',
+            'parentFacilityId',
+            'stagesSupported',
             'isScreeningCenter',
             'isTreatmentCenter',
         ]));
@@ -291,11 +325,42 @@ class FacilityController extends Controller
                 'email' => $facility->email,
                 'status' => $facility->status,
                 'facilityLevel' => $facility->facilityLevel,
+                'parentFacilityId' => $facility->parentFacilityId,
+                'stagesSupported' => $facility->stagesSupported,
                 'isScreeningCenter' => $facility->isScreeningCenter,
                 'isTreatmentCenter' => $facility->isTreatmentCenter,
                 'facilityTypes' => $facility->facility_types,
             ],
         ]);
+    }
+
+    /**
+     * Enforces the referral hierarchy shape: a Feeder's parent must be a
+     * SubHub, a SubHub's parent must be a Hub. A Hub sits at the top and
+     * shouldn't have a parent at all.
+     */
+    protected function validateParentTier(string $level, int $parentFacilityId): ?string
+    {
+        $expectedParentLevel = match ($level) {
+            'feeder' => 'subhub',
+            'subhub' => 'hub',
+            'hub' => null,
+            default => null,
+        };
+
+        if ($expectedParentLevel === null) {
+            return $level === 'hub'
+                ? 'A Hub is top-level and cannot have a parent facility.'
+                : null;
+        }
+
+        $parent = Facility::find($parentFacilityId);
+
+        if (!$parent || $parent->facilityLevel !== $expectedParentLevel) {
+            return ucfirst($level) . " facilities must have a " . ucfirst($expectedParentLevel) . " as their parent.";
+        }
+
+        return null;
     }
 
     /**
