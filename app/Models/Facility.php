@@ -28,6 +28,8 @@ class Facility extends Model
         'facilityLevel',
         'parentFacilityId',
         'stagesSupported',
+        'latitude',
+        'longitude',
         'navigatorName',
         'navigatorPhone',
         'navigatorEmail',
@@ -41,6 +43,8 @@ class Facility extends Model
         'isTreatmentCenter' => 'boolean',
         'facilityType' => 'array',
         'stagesSupported' => 'array',
+        'latitude' => 'float',
+        'longitude' => 'float',
         'isActive' => 'boolean',
     ];
 
