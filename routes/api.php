@@ -155,6 +155,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/analytics/cancer-by-age', [App\Http\Controllers\CancerAnalyticsController::class, 'getCancerByAgeClassification']);
     Route::get('/analytics/cancer-type-age-distribution/{cancerType}', [App\Http\Controllers\CancerAnalyticsController::class, 'getCancerTypeAgeDistribution']);
     Route::get('/analytics/gender-age-comparison', [App\Http\Controllers\CancerAnalyticsController::class, 'getGenderAgeComparison']);
+    Route::get('/analytics/stage2-outcomes', [App\Http\Controllers\CancerAnalyticsController::class, 'getStage2OutcomeDistribution']);
 
 
 });

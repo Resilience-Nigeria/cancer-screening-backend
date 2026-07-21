@@ -348,4 +348,60 @@ class CancerAnalyticsController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Stage 2 (Clinical Screening / PHC) overall outcome distribution —
+     * normal / low_suspicion / suspicious / urgent_referral. Nothing
+     * else aggregates this field; it's separate from the older
+     * case_outcomes-based treatment/clinical outcome statistics.
+     */
+    public function getStage2OutcomeDistribution(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $hasNationalAccess = $this->hasNationalAccess($user);
+
+            $query = DB::table('screening_visits')
+                ->whereNotNull('overallOutcome');
+
+            if (!$hasNationalAccess) {
+                $query->where('facilityId', $user->facilityId);
+            } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
+                $query->where('facilityId', $request->facilityId);
+            }
+
+            if ($request->filled('dateFrom')) {
+                $query->whereDate('visitDate', '>=', $request->dateFrom);
+            }
+            if ($request->filled('dateTo')) {
+                $query->whereDate('visitDate', '<=', $request->dateTo);
+            }
+
+            $counts = $query
+                ->select('overallOutcome', DB::raw('count(*) as total'))
+                ->groupBy('overallOutcome')
+                ->pluck('total', 'overallOutcome');
+
+            $distribution = [
+                'normal' => (int) ($counts['normal'] ?? 0),
+                'low_suspicion' => (int) ($counts['low_suspicion'] ?? 0),
+                'suspicious' => (int) ($counts['suspicious'] ?? 0),
+                'urgent_referral' => (int) ($counts['urgent_referral'] ?? 0),
+            ];
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'distribution' => $distribution,
+                    'total' => array_sum($distribution),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to fetch Stage 2 outcome distribution',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }
