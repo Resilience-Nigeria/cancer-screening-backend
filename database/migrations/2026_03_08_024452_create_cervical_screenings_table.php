@@ -19,8 +19,7 @@ return new class extends Migration {
             $table->boolean('colposcopyDone')->default(false);
             $table->boolean('biopsyDone')->default(false);
             $table->enum('biopsyResult', ['positive', 'negative'])->nullable();
-            $table->boolean('treatmentProvided')->default(false);
-            $table->boolean('referralCompleted')->default(false);
+          
             $table->enum('treatmentReferral', ['referred', 'not_referred'])->nullable();
             
             $table->timestamps();
