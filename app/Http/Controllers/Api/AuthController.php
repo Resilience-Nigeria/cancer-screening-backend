@@ -85,6 +85,14 @@ class AuthController extends Controller
             'phoneNumber'            => $user->phoneNumber ?? null,
             'alternatePhoneNumber'   => $user->alternatePhoneNumber ?? null,
             'role'                   => $user->user_role?->roleName ?? null,
+            // Computed server-side from the role's configured
+            // dataScopeType — the frontend should read these directly
+            // rather than re-deriving access level from role name
+            // strings, so changing a role's scope via the admin page
+            // takes effect immediately everywhere without a frontend
+            // redeploy.
+            'hasNationalAccess'      => $user->hasNationalAccess(),
+            'dataScopeType'          => $user->dataScopeType(),
         ];
 
         // Add facility data if it exists
@@ -145,6 +153,8 @@ class AuthController extends Controller
             'phoneNumber'            => $user->phoneNumber ?? null,
             'alternatePhoneNumber'   => $user->alternatePhoneNumber ?? null,
             'role'                   => $user->user_role?->roleName ?? null,
+            'hasNationalAccess'      => $user->hasNationalAccess(),
+            'dataScopeType'          => $user->dataScopeType(),
         ];
 
         // Add facility data if it exists

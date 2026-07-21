@@ -35,6 +35,15 @@ class User extends Authenticatable implements JWTSubject
         return $this->belongsTo(Facility::class, 'facilityId', 'facilityId');
     }
 
+    /**
+     * Facilities specifically granted to this individual user, on top
+     * of whatever their role's dataScopeType already provides.
+     */
+    public function facilityGrants(): HasMany
+    {
+        return $this->hasMany(UserFacilityGrant::class, 'userId', 'id');
+    }
+
     public function organization()  // ← Add this
 {
     return $this->belongsTo(Organization::class, 'organization_id');
@@ -170,26 +179,30 @@ class User extends Authenticatable implements JWTSubject
 
         $facility = $this->facility;
 
-        if (!$facility) {
-            return []; // No assigned facility — nothing to show.
-        }
+        $roleBasedIds = !$facility
+            ? []
+            : match ($scope) {
+                'state' => \App\Models\Facility::where('facilityState', $facility->facilityState)
+                    ->pluck('facilityId')->toArray(),
 
-        return match ($scope) {
-            'state' => \App\Models\Facility::where('facilityState', $facility->facilityState)
-                ->pluck('facilityId')->toArray(),
+                'hub_hierarchy' => ($hub = $facility->findAncestorAtLevel('hub'))
+                    ? $hub->descendantFacilityIds()
+                    : [$facility->facilityId],
 
-            'hub_hierarchy' => ($hub = $facility->findAncestorAtLevel('hub'))
-                ? $hub->descendantFacilityIds()
-                : [$facility->facilityId],
+                'subhub_hierarchy' => ($subhub = $facility->findAncestorAtLevel('subhub'))
+                    ? $subhub->descendantFacilityIds()
+                    : [$facility->facilityId],
 
-            'subhub_hierarchy' => ($subhub = $facility->findAncestorAtLevel('subhub'))
-                ? $subhub->descendantFacilityIds()
-                : [$facility->facilityId],
+                'facility_only' => [$facility->facilityId],
 
-            'facility_only' => [$facility->facilityId],
+                default => [$facility->facilityId],
+            };
 
-            default => [$facility->facilityId],
-        };
+        // Additional individually-granted facilities, on top of whatever
+        // the role scope already provides — never subtracts, only adds.
+        $grantedIds = $this->facilityGrants()->pluck('facilityId')->toArray();
+
+        return array_values(array_unique([...$roleBasedIds, ...$grantedIds]));
     }
 
     /**
