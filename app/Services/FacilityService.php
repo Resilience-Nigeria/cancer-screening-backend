@@ -238,4 +238,27 @@ class FacilityService
 
         return null;
     }
+
+    /**
+     * Great-circle distance between two lat/lng points, in kilometers.
+     * Pure math — no branch here can return anything but a float, so this
+     * can't produce the "must be of type float, null returned" error that
+     * a buggy version (e.g. one with an early `return null;` for missing
+     * coordinates) would.
+     */
+    protected function haversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadiusKm = 6371.0;
+
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+
+        $a = sin($dLat / 2) * sin($dLat / 2)
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
+            * sin($dLon / 2) * sin($dLon / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadiusKm * $c;
+    }
 }

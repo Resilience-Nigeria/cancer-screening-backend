@@ -33,4 +33,9 @@ class AwarenessRegistration extends Model
     {
         return $this->belongsTo(Facility::class, 'linkedFacilityId', 'facilityId');
     }
+
+    public function selfAssessments()
+    {
+        return $this->hasMany(SelfAssessment::class, 'registrationId', 'registrationId');
+    }
 }

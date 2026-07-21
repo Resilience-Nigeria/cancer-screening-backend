@@ -69,6 +69,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
         });
             
     Route::get('/awareness/registrations', [AwarenessRegistrationController::class, 'index']);
+    Route::get('/awareness/lookup', [AwarenessRegistrationController::class, 'lookupByPhone']);
     
     // routes/api.php — inside auth:api middleware group
 Route::post('/clients/{client}/referrals', [ClientReferralController::class, 'store']);
