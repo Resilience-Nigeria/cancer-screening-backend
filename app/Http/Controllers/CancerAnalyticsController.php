@@ -404,4 +404,184 @@ class CancerAnalyticsController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Facility-level performance comparison — screenings, referrals, and
+     * flagged (suspicious/urgent) Stage 2 outcomes per facility.
+     */
+    public function getFacilityPerformance(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $hasNationalAccess = $this->hasNationalAccess($user);
+
+            $screeningsQuery = DB::table('screening_visits')
+                ->join('facilities', 'screening_visits.facilityId', '=', 'facilities.facilityId')
+                ->select('facilities.facilityId', 'facilities.facilityName', DB::raw('count(*) as screeningsCount'));
+
+            if (!$hasNationalAccess) {
+                $screeningsQuery->where('facilities.facilityId', $user->facilityId);
+            } elseif ($request->filled('facilityId') && $request->facilityId !== 'all') {
+                $screeningsQuery->where('facilities.facilityId', $request->facilityId);
+            }
+            if ($request->filled('dateFrom')) {
+                $screeningsQuery->whereDate('screening_visits.visitDate', '>=', $request->dateFrom);
+            }
+            if ($request->filled('dateTo')) {
+                $screeningsQuery->whereDate('screening_visits.visitDate', '<=', $request->dateTo);
+            }
+
+            $screenings = $screeningsQuery
+                ->groupBy('facilities.facilityId', 'facilities.facilityName')
+                ->get()
+                ->keyBy('facilityId');
+
+            $referralsQuery = DB::table('client_referrals')
+                ->join('facilities', 'client_referrals.fromFacilityId', '=', 'facilities.facilityId')
+                ->select('facilities.facilityId', DB::raw('count(*) as referralsCount'));
+            if (!$hasNationalAccess) {
+                $referralsQuery->where('facilities.facilityId', $user->facilityId);
+            }
+            $referrals = $referralsQuery->groupBy('facilities.facilityId')->get()->keyBy('facilityId');
+
+            $flaggedQuery = DB::table('screening_visits')
+                ->whereIn('overallOutcome', ['suspicious', 'urgent_referral'])
+                ->select('facilityId', DB::raw('count(*) as flaggedCount'));
+            if (!$hasNationalAccess) {
+                $flaggedQuery->where('facilityId', $user->facilityId);
+            }
+            $flagged = $flaggedQuery->groupBy('facilityId')->get()->keyBy('facilityId');
+
+            $result = $screenings->map(function ($row) use ($referrals, $flagged) {
+                $facilityId = $row->facilityId;
+                return [
+                    'facilityId' => $facilityId,
+                    'facilityName' => $row->facilityName,
+                    'screeningsCount' => (int) $row->screeningsCount,
+                    'referralsCount' => (int) ($referrals[$facilityId]->referralsCount ?? 0),
+                    'flaggedCount' => (int) ($flagged[$facilityId]->flaggedCount ?? 0),
+                ];
+            })->sortByDesc('screeningsCount')->values();
+
+            return response()->json(['status' => true, 'data' => $result]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to fetch facility performance',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Referral / patient journey funnel: Registered -> Screened -> Referred
+     * -> Confirmed -> Treated, with conversion rate between each stage.
+     */
+    public function getReferralFunnel(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $hasNationalAccess = $this->hasNationalAccess($user);
+
+            $scope = function ($query, string $column) use ($hasNationalAccess, $user, $request) {
+                if (!$hasNationalAccess) {
+                    $query->where($column, $user->facilityId);
+                } elseif ($request->filled('facilityId') && $request->facilityId !== 'all') {
+                    $query->where($column, $request->facilityId);
+                }
+                return $query;
+            };
+
+            $registeredQuery = DB::table('clients');
+            $registered = $scope($registeredQuery, 'facilityId')->count();
+
+            $screenedQuery = DB::table('screening_visits');
+            $screened = $scope($screenedQuery, 'facilityId')->distinct()->count('clientId');
+
+            $referredQuery = DB::table('client_referrals');
+            $referred = $scope($referredQuery, 'fromFacilityId')->distinct()->count('clientId');
+
+            $confirmedQuery = DB::table('case_outcomes')
+                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
+                ->where('case_outcomes.cancerConfirmed', 'yes');
+            $confirmed = $scope($confirmedQuery, 'clients.facilityId')->count();
+
+            $treatedQuery = DB::table('case_outcomes')
+                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
+                ->where('case_outcomes.treatmentCommenced', 'yes');
+            $treated = $scope($treatedQuery, 'clients.facilityId')->count();
+
+            $stages = [
+                ['key' => 'registered', 'label' => 'Registered', 'count' => $registered],
+                ['key' => 'screened', 'label' => 'Screened', 'count' => $screened],
+                ['key' => 'referred', 'label' => 'Referred', 'count' => $referred],
+                ['key' => 'confirmed', 'label' => 'Confirmed', 'count' => $confirmed],
+                ['key' => 'treated', 'label' => 'Treated', 'count' => $treated],
+            ];
+
+            foreach ($stages as $i => &$stage) {
+                $stage['conversionFromPrevious'] = $i === 0
+                    ? null
+                    : ($stages[$i - 1]['count'] > 0 ? round(($stage['count'] / $stages[$i - 1]['count']) * 100, 1) : 0.0);
+            }
+            unset($stage);
+
+            return response()->json(['status' => true, 'data' => $stages]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to fetch referral funnel',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Average days between key journey milestones. This is a starting
+     * baseline (registration->screening, registration->referral,
+     * diagnosis->treatment) — thresholds for what counts as "on time" vs
+     * "delayed" should be reviewed against NICRAT's actual protocol targets.
+     */
+    public function getTimingMetrics(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $hasNationalAccess = $this->hasNationalAccess($user);
+
+            $regToScreen = DB::table('clients')
+                ->join('screening_visits', 'clients.clientId', '=', 'screening_visits.clientId')
+                ->when(!$hasNationalAccess, fn ($q) => $q->where('clients.facilityId', $user->facilityId))
+                ->selectRaw('AVG(DATEDIFF(screening_visits.visitDate, clients.registrationDate)) as avgDays')
+                ->first();
+
+            $regToReferral = DB::table('client_referrals')
+                ->join('clients', 'client_referrals.clientId', '=', 'clients.clientId')
+                ->when(!$hasNationalAccess, fn ($q) => $q->where('clients.facilityId', $user->facilityId))
+                ->selectRaw('AVG(DATEDIFF(client_referrals.referralDate, clients.registrationDate)) as avgDays')
+                ->first();
+
+            $diagnosisToTreatment = DB::table('case_outcomes')
+                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
+                ->whereNotNull('diagnosisDate')
+                ->whereNotNull('treatmentCommencementDate')
+                ->when(!$hasNationalAccess, fn ($q) => $q->where('clients.facilityId', $user->facilityId))
+                ->selectRaw('AVG(DATEDIFF(treatmentCommencementDate, diagnosisDate)) as avgDays')
+                ->first();
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'registrationToScreeningDays' => round((float) ($regToScreen->avgDays ?? 0), 1),
+                    'registrationToReferralDays' => round((float) ($regToReferral->avgDays ?? 0), 1),
+                    'diagnosisToTreatmentDays' => round((float) ($diagnosisToTreatment->avgDays ?? 0), 1),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to fetch timing metrics',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }
