@@ -117,6 +117,26 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::patch('/diagnostic-evaluations/{evaluation}', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'update']);
     Route::post('/diagnostic-evaluations/{evaluation}/pathology', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'finalizePathology']);
 
+    // ── Stage 4: Treatment & Care Management ────────────────────────────
+    Route::get('/treatment-plans/pending-evaluations', [App\Http\Controllers\Api\TreatmentPlanController::class, 'pendingEvaluations']);
+    Route::get('/treatment-plans/client-context/{clientId}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'clientContext']);
+    Route::post('/treatment-plans', [App\Http\Controllers\Api\TreatmentPlanController::class, 'store']);
+    Route::get('/treatment-plans/{plan}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'show']);
+    Route::patch('/treatment-plans/{plan}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'update']);
+    Route::post('/treatment-plans/{plan}/decision', [App\Http\Controllers\Api\TreatmentPlanController::class, 'classifyDecision']);
+    Route::post('/treatment-plans/{plan}/outcome', [App\Http\Controllers\Api\TreatmentPlanController::class, 'finalizeOutcome']);
+
+    Route::get('/treatment-plans/{plan}/records', [App\Http\Controllers\Api\TreatmentRecordController::class, 'index']);
+    Route::post('/treatment-plans/{plan}/records', [App\Http\Controllers\Api\TreatmentRecordController::class, 'store']);
+    Route::patch('/treatment-records/{record}', [App\Http\Controllers\Api\TreatmentRecordController::class, 'update']);
+    Route::delete('/treatment-records/{record}', [App\Http\Controllers\Api\TreatmentRecordController::class, 'destroy']);
+
+    Route::get('/treatment-plans/{plan}/monitoring', [App\Http\Controllers\Api\TreatmentMonitoringController::class, 'index']);
+    Route::post('/treatment-plans/{plan}/monitoring', [App\Http\Controllers\Api\TreatmentMonitoringController::class, 'store']);
+
+    Route::get('/follow-up-schedules', [App\Http\Controllers\Api\FollowUpScheduleController::class, 'index']);
+    Route::post('/follow-up-schedules/{schedule}/complete', [App\Http\Controllers\Api\FollowUpScheduleController::class, 'markCompleted']);
+
     Route::get('/visits/{visit}/cervical-screening', [CervicalScreeningController::class, 'show']);
     Route::post('/visits/{visit}/cervical-screening', [CervicalScreeningController::class, 'store']);
 
