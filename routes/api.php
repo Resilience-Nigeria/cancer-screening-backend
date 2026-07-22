@@ -192,6 +192,11 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::patch('/roles/{role}/scope', [App\Http\Controllers\Api\RoleController::class, 'updateScope']);
     Route::get('/settings', [App\Http\Controllers\Api\SettingsController::class, 'index']);
     Route::patch('/settings', [App\Http\Controllers\Api\SettingsController::class, 'update']);
+    Route::get('/notification-providers', [App\Http\Controllers\Api\NotificationProviderController::class, 'index']);
+    Route::post('/notification-providers', [App\Http\Controllers\Api\NotificationProviderController::class, 'store']);
+    Route::patch('/notification-providers/{provider}', [App\Http\Controllers\Api\NotificationProviderController::class, 'update']);
+    Route::post('/notification-providers/{provider}/default', [App\Http\Controllers\Api\NotificationProviderController::class, 'setDefault']);
+    Route::delete('/notification-providers/{provider}', [App\Http\Controllers\Api\NotificationProviderController::class, 'destroy']);
     Route::get('/users/{user}/facility-grants', [App\Http\Controllers\Api\UserFacilityGrantController::class, 'index']);
     Route::post('/users/{user}/facility-grants', [App\Http\Controllers\Api\UserFacilityGrantController::class, 'store']);
     Route::delete('/users/{user}/facility-grants/{facilityId}', [App\Http\Controllers\Api\UserFacilityGrantController::class, 'destroy']);

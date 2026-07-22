@@ -14,9 +14,16 @@ class WhatsAppService
 
     public function __construct()
     {
-        $this->apiUrl        = config('services.whatsapp.api_url');
-        $this->apiToken      = config('services.whatsapp.token');
-        $this->phoneNumberId = config('services.whatsapp.phone_number_id');
+        $dbProvider = \App\Models\NotificationProvider::where('channel', 'whatsapp')
+            ->where('providerKey', 'whatsapp_meta')
+            ->where('isActive', true)
+            ->first();
+
+        $dbConfig = $dbProvider?->config ?? [];
+
+        $this->apiUrl        = $dbConfig['apiUrl'] ?: config('services.whatsapp.api_url');
+        $this->apiToken      = $dbConfig['token'] ?: config('services.whatsapp.token');
+        $this->phoneNumberId = $dbConfig['phoneNumberId'] ?: config('services.whatsapp.phone_number_id');
     }
 
     /**

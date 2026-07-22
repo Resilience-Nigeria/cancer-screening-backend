@@ -20,14 +20,21 @@ class BulkSmsService
 
     public function __construct()
     {
-        $sandbox = (bool) config('services.bulksms_nigeria.sandbox');
+        $dbProvider = \App\Models\NotificationProvider::where('channel', 'sms')
+            ->where('providerKey', 'bulksms')
+            ->where('isActive', true)
+            ->first();
+
+        $dbConfig = $dbProvider?->config ?? [];
+
+        $sandbox = $dbConfig['sandbox'] ?? (bool) config('services.bulksms_nigeria.sandbox');
 
         $this->baseUrl = $sandbox
             ? 'https://www.bulksmsnigeria.com/api/sandbox/v2'
             : 'https://www.bulksmsnigeria.com/api/v2';
 
-        $this->apiToken = (string) config('services.bulksms_nigeria.api_token');
-        $this->senderId = (string) config('services.bulksms_nigeria.sender_id', 'NCSR');
+        $this->apiToken = (string) ($dbConfig['apiToken'] ?: config('services.bulksms_nigeria.api_token'));
+        $this->senderId = (string) ($dbConfig['senderId'] ?: config('services.bulksms_nigeria.sender_id', 'NCSR'));
     }
 
     /**

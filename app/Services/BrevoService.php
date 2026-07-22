@@ -15,9 +15,16 @@ protected string $apiUrl    = 'https://api.brevo.com/v3';
 
    public function __construct()
 {
-    $this->apiKey    = config('services.brevo.key', '');
-    $this->fromEmail = config('services.brevo.from_email', '');
-    $this->fromName  = config('services.brevo.from_name', 'NCSR');
+    $dbProvider = \App\Models\NotificationProvider::where('channel', 'email')
+        ->where('providerKey', 'brevo')
+        ->where('isActive', true)
+        ->first();
+
+    $dbConfig = $dbProvider?->config ?? [];
+
+    $this->apiKey    = $dbConfig['apiKey'] ?: config('services.brevo.key', '');
+    $this->fromEmail = $dbConfig['fromEmail'] ?: config('services.brevo.from_email', '');
+    $this->fromName  = $dbConfig['fromName'] ?: config('services.brevo.from_name', 'NCSR');
 
     if (empty($this->apiKey)) {
         Log::warning('BrevoService: BREVO_API_KEY is not configured.');
