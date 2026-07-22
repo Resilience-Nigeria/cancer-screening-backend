@@ -4,6 +4,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Twilio\Rest\Client as TwilioClient;
 use Twilio\Exceptions\TwilioException;
 
@@ -12,15 +13,33 @@ class WhatsAppService
     protected ?TwilioClient $client = null;
     protected string $from = '';
     protected bool $enabled = false;
+    protected bool $resolved = false;
 
-    public function __construct()
+    /**
+     * Credential resolution is deferred until the first actual send,
+     * not done in the constructor. Laravel's console kernel can resolve
+     * this class out of the container for ANY artisan command (it's a
+     * dependency of SendFollowUpReminders), including `migrate` itself —
+     * querying notification_providers in the constructor meant a fresh
+     * `php artisan migrate` failed before the table even existed.
+     */
+    protected function resolveConfig(): void
     {
-        $dbProvider = \App\Models\NotificationProvider::where('channel', 'whatsapp')
-            ->where('providerKey', 'twilio_whatsapp')
-            ->where('isActive', true)
-            ->first();
+        if ($this->resolved) {
+            return;
+        }
+        $this->resolved = true;
 
-        $dbConfig = $dbProvider?->config ?? [];
+        $dbConfig = [];
+
+        if (Schema::hasTable('notification_providers')) {
+            $dbProvider = \App\Models\NotificationProvider::where('channel', 'whatsapp')
+                ->where('providerKey', 'twilio_whatsapp')
+                ->where('isActive', true)
+                ->first();
+
+            $dbConfig = $dbProvider?->config ?? [];
+        }
 
         // NOTE: these config('services.twilio.*') fallback keys are my
         // best guess at your existing .env mapping based on the
@@ -53,6 +72,8 @@ class WhatsAppService
      */
     public function sendWithStatus(string $to, string $message): string
     {
+        $this->resolveConfig();
+
         if (!$this->enabled) {
             Log::info('WhatsAppService: disabled via TWILIO_WHATSAPP_ENABLED=false.');
             return 'failed';
