@@ -410,6 +410,84 @@ class CancerAnalyticsController extends Controller
      * Stage 4 — treatment outcome distribution and modality usage
      * across the user's visible facilities.
      */
+    /**
+     * Socio-economic status breakdown (NICRAT model) across the client
+     * population — used to help identify clients who may need
+     * financial/support assistance (indigency), and to see whether
+     * lower socio-economic class correlates with higher cancer risk or
+     * confirmed diagnoses in this population.
+     */
+    public function getSocioeconomicAnalytics(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $hasNationalAccess = $this->hasNationalAccess($user);
+
+            $query = DB::table('client_risk_profiles')
+                ->join('clients', 'client_risk_profiles.clientId', '=', 'clients.clientId')
+                ->whereNotNull('client_risk_profiles.socioeconomicClass');
+
+            if (!$hasNationalAccess) {
+                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
+            } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
+                $query->where('clients.facilityId', $request->facilityId);
+            }
+
+            $classDistribution = (clone $query)
+                ->select('client_risk_profiles.socioeconomicClass', DB::raw('count(*) as total'))
+                ->groupBy('client_risk_profiles.socioeconomicClass')
+                ->pluck('total', 'socioeconomicClass');
+
+            // Cross-tab: does lower socio-economic class correlate with
+            // higher cancer risk in this population?
+            $classByCancerRisk = (clone $query)
+                ->whereNotNull('client_risk_profiles.cancerRiskCategory')
+                ->select(
+                    'client_risk_profiles.socioeconomicClass',
+                    'client_risk_profiles.cancerRiskCategory',
+                    DB::raw('count(*) as total'),
+                )
+                ->groupBy('client_risk_profiles.socioeconomicClass', 'client_risk_profiles.cancerRiskCategory')
+                ->get()
+                ->groupBy('socioeconomicClass')
+                ->map(fn ($rows) => $rows->pluck('total', 'cancerRiskCategory'));
+
+            // Of lower-class clients, how many have a confirmed cancer
+            // diagnosis and/or an active treatment plan — the group most
+            // likely to need support right now.
+            $lowerClassClientIds = (clone $query)
+                ->where('client_risk_profiles.socioeconomicClass', 'lower')
+                ->pluck('clients.clientId');
+
+            $lowerClassWithConfirmedCancer = DB::table('case_outcomes')
+                ->whereIn('clientId', $lowerClassClientIds)
+                ->where('cancerConfirmed', 'yes')
+                ->count();
+
+            $lowerClassWithActiveTreatment = DB::table('treatment_plans')
+                ->whereIn('clientId', $lowerClassClientIds)
+                ->where('status', 'active')
+                ->count();
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'classDistribution' => $classDistribution,
+                    'classByCancerRisk' => $classByCancerRisk,
+                    'lowerClassTotal' => $lowerClassClientIds->count(),
+                    'lowerClassWithConfirmedCancer' => $lowerClassWithConfirmedCancer,
+                    'lowerClassWithActiveTreatment' => $lowerClassWithActiveTreatment,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to fetch socioeconomic analytics',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function getTreatmentAnalytics(Request $request): JsonResponse
     {
         try {

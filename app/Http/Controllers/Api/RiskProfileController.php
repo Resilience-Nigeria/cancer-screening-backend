@@ -6,10 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpsertRiskProfileRequest;
 use App\Models\Client;
 use App\Models\ClientRiskProfile;
+use App\Services\CancerRiskStratificationService;
 use Illuminate\Http\JsonResponse;
 
 class RiskProfileController extends Controller
 {
+    public function __construct(protected CancerRiskStratificationService $riskModel)
+    {
+    }
+
     public function show(Client $client): JsonResponse
     {
         $this->authorizeClient($client);
@@ -30,6 +35,23 @@ class RiskProfileController extends Controller
         );
         $data['recordedAt'] = now();
         $data['recordedBy'] = auth('api')->id();
+
+        // NICRAT Cancer Risk Stratification Model — computed on every
+        // save so the record always reflects the current inputs, and
+        // stored so it's queryable without recomputing.
+        $classification = $this->riskModel->classify(
+            $data['bmi'],
+            $data['smokingStatus'] ?? null,
+            $data['alcoholConsumption'] ?? null,
+            $data['physicalActivityLevel'] ?? null,
+            $data['hivStatus'] ?? null,
+        );
+        $data = [...$data, ...$classification];
+
+        $socioeconomic = $this->riskModel->classifySocioeconomicStatus($data['occupationCategory'] ?? null);
+        if ($socioeconomic) {
+            $data = [...$data, ...$socioeconomic];
+        }
 
         $riskProfile = ClientRiskProfile::updateOrCreate(
             ['clientId' => $client->clientId],
