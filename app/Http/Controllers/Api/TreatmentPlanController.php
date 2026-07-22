@@ -15,6 +15,24 @@ use Illuminate\Http\Request;
 class TreatmentPlanController extends Controller
 {
     /**
+     * All treatment plans across the user's visible facilities — the
+     * Treatment Tracking page.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $visibleIds = $user->visibleFacilityIds();
+
+        $plans = TreatmentPlan::with(['client', 'facility', 'treatmentRecords'])
+            ->when($visibleIds !== null, fn ($q) => $q->whereIn('facilityId', $visibleIds))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->latest('treatmentPlanId')
+            ->paginate(20);
+
+        return response()->json($plans);
+    }
+
+    /**
      * Completed Stage 3 evaluations (a histopathology result exists)
      * that don't yet have a Stage 4 treatment plan — the inbox for
      * whichever facility is configured to handle stage4.

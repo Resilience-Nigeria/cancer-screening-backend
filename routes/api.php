@@ -121,6 +121,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     // ── Stage 4: Treatment & Care Management ────────────────────────────
     Route::get('/treatment-plans/pending-evaluations', [App\Http\Controllers\Api\TreatmentPlanController::class, 'pendingEvaluations']);
     Route::get('/treatment-plans/client-context/{clientId}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'clientContext']);
+    Route::get('/treatment-plans', [App\Http\Controllers\Api\TreatmentPlanController::class, 'index']);
     Route::post('/treatment-plans', [App\Http\Controllers\Api\TreatmentPlanController::class, 'store']);
     Route::get('/treatment-plans/{plan}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'show']);
     Route::patch('/treatment-plans/{plan}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'update']);
