@@ -4,21 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\MenuVisibilityRule;
+use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class MenuVisibilityController extends Controller
 {
-    /**
-     * The full role list menu rules can be restricted to — kept here
-     * rather than hardcoded into the frontend, so the admin UI always
-     * matches the actual roles that exist.
-     */
-    public const ROLES = [
-        'NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN', 'NAVIGATOR',
-        'HOSPITAL_ADMIN', 'NURSE', 'DOCTOR', 'PARTNER',
-    ];
-
     /**
      * Any authenticated user can read this — they need it to know which
      * menu items to render for their own role. Only the update below is
@@ -28,14 +19,22 @@ class MenuVisibilityController extends Controller
     {
         return response()->json([
             'rules' => MenuVisibilityRule::orderBy('menuLabel')->get(),
-            'roles' => self::ROLES,
+            'roles' => Role::orderBy('roleName')->pluck('roleName'),
         ]);
     }
 
     /**
      * Bulk-update. Accepts { rules: { menuKey: [role, role, ...] | null } }
-     * so the whole matrix can be saved in one request. An empty array or
-     * null means "visible to everyone".
+     * so the whole matrix can be saved in one request.
+     *
+     * null            = visible to everyone (no restriction)
+     * [] (empty array) = restricted to nobody — only unchecked roles,
+     *                     nothing assigned, so nobody can see it
+     * [role, ...]      = visible only to the listed roles
+     *
+     * These are kept distinct rather than collapsing an empty array to
+     * null, so unchecking every role actually means "nobody assigned"
+     * rather than silently reverting to "everyone".
      */
     public function update(Request $request): JsonResponse
     {
@@ -47,15 +46,21 @@ class MenuVisibilityController extends Controller
             'rules' => 'required|array',
         ]);
 
+        $validRoles = Role::pluck('roleName')->all();
+
         foreach ($validated['rules'] as $menuKey => $roles) {
             $rule = MenuVisibilityRule::where('menuKey', $menuKey)->first();
             if (!$rule) {
                 continue; // Ignore unknown keys rather than creating arbitrary rows
             }
 
-            $roles = is_array($roles) ? array_values(array_intersect($roles, self::ROLES)) : null;
+            if ($roles === null) {
+                $rule->update(['allowedRoles' => null]);
+                continue;
+            }
 
-            $rule->update(['allowedRoles' => empty($roles) ? null : $roles]);
+            $roles = array_values(array_intersect((array) $roles, $validRoles));
+            $rule->update(['allowedRoles' => $roles]);
         }
 
         return response()->json(['message' => 'Menu visibility updated.']);
