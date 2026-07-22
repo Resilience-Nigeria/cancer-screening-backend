@@ -180,6 +180,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
         // Facilities Management Routes
     Route::get('/facilities', [FacilityController::class, 'index']);
     Route::get('/facilities/states', [FacilityController::class, 'states']);
+    Route::get('/facilities/map', [FacilityController::class, 'map']);
     Route::get('/facilities/{facility}', [FacilityController::class, 'show']);
     Route::post('/facilities', [FacilityController::class, 'store']);
     Route::put('/facilities/{facility}', [FacilityController::class, 'update']);

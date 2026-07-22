@@ -427,4 +427,39 @@ class FacilityController extends Controller
             'states' => $states,
         ]);
     }
+
+    /**
+     * Facility geo data for the national facility map — only facilities
+     * with coordinates set are returned, since not every facility has
+     * been geo-located yet. The frontend surfaces how many are missing
+     * so it's visible as a data-quality gap, not silently dropped.
+     */
+    public function map(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        $query = Facility::query();
+        $visibleIds = $user->visibleFacilityIds();
+        if ($visibleIds !== null) {
+            $query->whereIn('facilityId', $visibleIds);
+        }
+
+        $totalCount = (clone $query)->count();
+
+        $withCoords = (clone $query)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->get([
+                'facilityId', 'facilityName', 'facilityCode', 'facilityLevel',
+                'facilityState', 'facilityLga', 'latitude', 'longitude',
+                'isScreeningCenter', 'isTreatmentCenter', 'stagesSupported', 'status',
+            ]);
+
+        return response()->json([
+            'status' => true,
+            'facilities' => $withCoords,
+            'totalCount' => $totalCount,
+            'missingCoordinatesCount' => $totalCount - $withCoords->count(),
+        ]);
+    }
 }
