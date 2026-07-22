@@ -10,45 +10,37 @@ use Twilio\Exceptions\TwilioException;
 class WhatsAppService
 {
     protected ?TwilioClient $client = null;
-    protected string $from;
-    protected bool $enabled;
+    protected string $from = '';
+    protected bool $enabled = false;
 
     public function __construct()
     {
         $dbProvider = \App\Models\NotificationProvider::where('channel', 'whatsapp')
-            ->where('providerKey', 'whatsapp_meta')
+            ->where('providerKey', 'twilio_whatsapp')
             ->where('isActive', true)
             ->first();
 
         $dbConfig = $dbProvider?->config ?? [];
 
-        $this->apiUrl        = $dbConfig['apiUrl'] ?: config('services.whatsapp.api_url');
-        $this->apiToken      = $dbConfig['token'] ?: config('services.whatsapp.token');
-        $this->phoneNumberId = $dbConfig['phoneNumberId'] ?: config('services.whatsapp.phone_number_id');
-    }
+        // NOTE: these config('services.twilio.*') fallback keys are my
+        // best guess at your existing .env mapping based on the
+        // TWILIO_WHATSAPP_ENABLED reference in your log message — please
+        // check these against your actual config/services.php and adjust
+        // if the keys don't match.
+        $accountSid = $dbConfig['accountSid'] ?? config('services.twilio.sid');
+        $authToken  = $dbConfig['authToken'] ?? config('services.twilio.token');
+        $this->from = $dbConfig['fromNumber'] ?? config('services.twilio.whatsapp_from', '');
+        $this->enabled = array_key_exists('enabled', $dbConfig)
+            ? filter_var($dbConfig['enabled'], FILTER_VALIDATE_BOOLEAN)
+            : (bool) config('services.twilio.whatsapp_enabled', true);
 
-    /**
-     * Send a plain-text WhatsApp message.
-     */
-    public function send(string $to, string $message): bool
-{
-    $to = $this->normalizeNumber($to);
-
-    Log::info('WhatsApp send attempt', [
-        'to'             => $to,
-        'phone_number_id'=> $this->phoneNumberId,
-        'api_url'        => $this->apiUrl,
-        'message_length' => strlen($message),
-    ]);
-
-    try {
-        $response = Http::withToken($this->apiToken)
-            ->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", [
-                'messaging_product' => 'whatsapp',
-                'to'                => $to,
-                'type'              => 'text',
-                'text'              => ['body' => $message],
-            ]);
+        if ($accountSid && $authToken) {
+            try {
+                $this->client = new TwilioClient($accountSid, $authToken);
+            } catch (\Throwable $e) {
+                Log::error('WhatsAppService: failed to initialize Twilio client', ['error' => $e->getMessage()]);
+                $this->client = null;
+            }
         }
     }
 

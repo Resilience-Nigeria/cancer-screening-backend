@@ -77,13 +77,14 @@ class NotificationProviderTemplates
                 ],
             ],
             'whatsapp' => [
-                'whatsapp_meta' => [
-                    'name' => 'WhatsApp (Meta Cloud API)',
+                'twilio_whatsapp' => [
+                    'name' => 'WhatsApp (Twilio)',
                     'implemented' => true,
                     'fields' => [
-                        'apiUrl' => 'API URL',
-                        'token' => 'Access Token',
-                        'phoneNumberId' => 'Phone Number ID',
+                        'accountSid' => 'Twilio Account SID',
+                        'authToken' => 'Twilio Auth Token',
+                        'fromNumber' => 'From Number (e.g. whatsapp:+14155238886)',
+                        'enabled' => 'Enabled (true/false)',
                     ],
                 ],
             ],
