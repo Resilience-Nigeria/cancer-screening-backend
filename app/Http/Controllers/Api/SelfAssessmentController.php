@@ -47,4 +47,30 @@ class SelfAssessmentController extends Controller
             ]),
         ], 201);
     }
+
+    /**
+     * Stage 1 self-assessment records — for internal staff visibility,
+     * not the public submission flow above.
+     */
+    public function index(\Illuminate\Http\Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $visibleIds = $user->visibleFacilityIds();
+        $search = $request->string('search')->toString();
+
+        $assessments = SelfAssessment::with(['registration', 'client'])
+            ->when($visibleIds !== null, function ($q) use ($visibleIds) {
+                $q->whereHas('registration', fn ($r) => $r->whereIn('linkedFacilityId', $visibleIds));
+            })
+            ->when($search, function ($q) use ($search) {
+                $q->whereHas('registration', function ($r) use ($search) {
+                    $r->where('fullName', 'like', "%{$search}%")
+                        ->orWhere('phoneNumber', 'like', "%{$search}%");
+                });
+            })
+            ->latest('completedAt')
+            ->paginate(20);
+
+        return response()->json($assessments);
+    }
 }

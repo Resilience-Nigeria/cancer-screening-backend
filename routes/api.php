@@ -97,6 +97,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/clients/search/details', [ClientController::class, 'search']);
     Route::get('/clients/check-duplicate', [ClientController::class, 'checkDuplicate']);
     Route::get('/clients/linked', [ClientController::class, 'linked']);
+    Route::get('/self-assessments', [SelfAssessmentController::class, 'index']);
     Route::get('/clients/{client}', [ClientController::class, 'show']);
     Route::patch('/clients/{client}', [ClientController::class, 'update']);
 
@@ -116,14 +117,15 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/diagnostic-evaluations/{evaluation}', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'show']);
     Route::patch('/diagnostic-evaluations/{evaluation}', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'update']);
     Route::post('/diagnostic-evaluations/{evaluation}/pathology', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'finalizePathology']);
+    Route::post('/diagnostic-evaluations/{evaluation}/decision', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'classifyDecision']);
 
     // ── Stage 4: Treatment & Care Management ────────────────────────────
     Route::get('/treatment-plans/pending-evaluations', [App\Http\Controllers\Api\TreatmentPlanController::class, 'pendingEvaluations']);
     Route::get('/treatment-plans/client-context/{clientId}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'clientContext']);
+    Route::get('/treatment-plans', [App\Http\Controllers\Api\TreatmentPlanController::class, 'index']);
     Route::post('/treatment-plans', [App\Http\Controllers\Api\TreatmentPlanController::class, 'store']);
     Route::get('/treatment-plans/{plan}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'show']);
     Route::patch('/treatment-plans/{plan}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'update']);
-    Route::post('/treatment-plans/{plan}/decision', [App\Http\Controllers\Api\TreatmentPlanController::class, 'classifyDecision']);
     Route::post('/treatment-plans/{plan}/outcome', [App\Http\Controllers\Api\TreatmentPlanController::class, 'finalizeOutcome']);
 
     Route::get('/treatment-plans/{plan}/records', [App\Http\Controllers\Api\TreatmentRecordController::class, 'index']);
@@ -207,6 +209,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/analytics/facility-performance', [App\Http\Controllers\CancerAnalyticsController::class, 'getFacilityPerformance']);
     Route::get('/analytics/referral-funnel', [App\Http\Controllers\CancerAnalyticsController::class, 'getReferralFunnel']);
     Route::get('/analytics/timing-metrics', [App\Http\Controllers\CancerAnalyticsController::class, 'getTimingMetrics']);
+    Route::get('/analytics/treatment', [App\Http\Controllers\CancerAnalyticsController::class, 'getTreatmentAnalytics']);
 
 
 });

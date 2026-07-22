@@ -407,6 +407,67 @@ class CancerAnalyticsController extends Controller
     }
 
     /**
+     * Stage 4 — treatment outcome distribution and modality usage
+     * across the user's visible facilities.
+     */
+    public function getTreatmentAnalytics(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $hasNationalAccess = $this->hasNationalAccess($user);
+
+            $plansQuery = DB::table('treatment_plans');
+            if (!$hasNationalAccess) {
+                $plansQuery->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
+            } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
+                $plansQuery->where('facilityId', $request->facilityId);
+            }
+
+            $outcomeCounts = (clone $plansQuery)
+                ->whereNotNull('treatmentOutcome')
+                ->select('treatmentOutcome', DB::raw('count(*) as total'))
+                ->groupBy('treatmentOutcome')
+                ->pluck('total', 'treatmentOutcome');
+
+            $intentCounts = (clone $plansQuery)
+                ->whereNotNull('treatmentIntent')
+                ->select('treatmentIntent', DB::raw('count(*) as total'))
+                ->groupBy('treatmentIntent')
+                ->pluck('total', 'treatmentIntent');
+
+            $modalityQuery = DB::table('treatment_records')
+                ->join('treatment_plans', 'treatment_records.treatmentPlanId', '=', 'treatment_plans.treatmentPlanId');
+            if (!$hasNationalAccess) {
+                $modalityQuery->whereIn('treatment_plans.facilityId', $user->visibleFacilityIds() ?? []);
+            } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
+                $modalityQuery->where('treatment_plans.facilityId', $request->facilityId);
+            }
+
+            $modalityCounts = $modalityQuery
+                ->select('treatment_records.modalityType', DB::raw('count(*) as total'))
+                ->groupBy('treatment_records.modalityType')
+                ->pluck('total', 'modalityType');
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'activePlans' => (clone $plansQuery)->where('status', 'active')->count(),
+                    'closedPlans' => (clone $plansQuery)->where('status', 'closed')->count(),
+                    'outcomeDistribution' => $outcomeCounts,
+                    'intentDistribution' => $intentCounts,
+                    'modalityUsage' => $modalityCounts,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to fetch treatment analytics',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Facility-level performance comparison — screenings, referrals, and
      * flagged (suspicious/urgent) Stage 2 outcomes per facility.
      */

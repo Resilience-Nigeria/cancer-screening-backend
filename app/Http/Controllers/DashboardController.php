@@ -151,6 +151,15 @@ class DashboardController extends Controller
 
             $totalReferred = $this->getReferredClientsCount($user, $request, $hasNationalAccess);
 
+            // Stage 4 — active treatment plans
+            $activeTreatmentPlansQuery = DB::table('treatment_plans')->where('status', 'active');
+            if (!$hasNationalAccess) {
+                $activeTreatmentPlansQuery->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
+            } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
+                $activeTreatmentPlansQuery->where('facilityId', $request->facilityId);
+            }
+            $activeTreatmentPlans = $activeTreatmentPlansQuery->count();
+
             return response()->json([
                 'stats' => [
                     'totalClients' => $totalClients,
@@ -164,6 +173,7 @@ class DashboardController extends Controller
                     'colorectalScreenings' => $colorectalScreenings,
                     'liverScreenings' => $liverScreenings,
                     'positiveFindings' => $positiveFindings,
+                    'activeTreatmentPlans' => $activeTreatmentPlans,
                 ]
             ]);
         } catch (\Exception $e) {

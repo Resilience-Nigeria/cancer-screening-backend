@@ -15,6 +15,24 @@ use Illuminate\Http\Request;
 class TreatmentPlanController extends Controller
 {
     /**
+     * All treatment plans across the user's visible facilities — the
+     * Treatment Tracking page.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $visibleIds = $user->visibleFacilityIds();
+
+        $plans = TreatmentPlan::with(['client', 'facility', 'treatmentRecords'])
+            ->when($visibleIds !== null, fn ($q) => $q->whereIn('facilityId', $visibleIds))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->latest('treatmentPlanId')
+            ->paginate(20);
+
+        return response()->json($plans);
+    }
+
+    /**
      * Completed Stage 3 evaluations (a histopathology result exists)
      * that don't yet have a Stage 4 treatment plan — the inbox for
      * whichever facility is configured to handle stage4.
@@ -34,7 +52,7 @@ class TreatmentPlanController extends Controller
 
         $evaluations = DiagnosticEvaluation::with('client')
             ->where('status', 'completed')
-            ->whereNotNull('histopathologyResult')
+            ->where('decisionPathway', 'cancer_confirmed')
             ->when($visibleIds !== null, fn ($q) => $q->whereIn('facilityId', $visibleIds))
             ->when($visibleIds === null, fn ($q) => $q->where('facilityId', $facility->facilityId))
             ->whereDoesntHave('client.treatmentPlans')
@@ -70,10 +88,19 @@ class TreatmentPlanController extends Controller
             ->latest('pathologyDate')
             ->first();
 
+        // If a treatment plan already exists for this client, return it
+        // too — the frontend uses this to resume/prefill an in-progress
+        // plan rather than always starting blank.
+        $existingPlan = \App\Models\TreatmentPlan::where('clientId', $client->clientId)
+            ->with(['treatmentRecords', 'followUpSchedules'])
+            ->latest('treatmentPlanId')
+            ->first();
+
         return response()->json([
             'client' => $client,
             'riskProfile' => $client->latestRiskProfile,
             'evaluation' => $latestEvaluation,
+            'existingPlan' => $existingPlan,
         ]);
     }
 
@@ -153,53 +180,6 @@ class TreatmentPlanController extends Controller
         $plan->update($validated);
 
         return response()->json(['message' => 'Treatment plan updated.', 'plan' => $plan]);
-    }
-
-    /**
-     * 4.2 Final Clinical Decision — Pathway A (No Cancer) or B
-     * (Pre-cancerous). Pathway C (Cancer Confirmed) doesn't close the
-     * plan here — it proceeds through staging/MDT/modalities instead.
-     */
-    public function classifyDecision(Request $request, TreatmentPlan $plan): JsonResponse
-    {
-        if (!$request->user()->canAccessFacility($plan->facilityId)) {
-            return response()->json(['message' => 'Not authorized.'], 403);
-        }
-
-        $validated = $request->validate([
-            'decisionPathway' => 'required|in:no_cancer,pre_cancerous,cancer_confirmed',
-            'managementNotes' => 'nullable|string',
-            'routineRecallDate' => 'nullable|date',
-            'procedurePerformed' => 'nullable|string',
-            'procedureComplications' => 'nullable|string',
-            'surveillanceNotes' => 'nullable|string',
-        ]);
-
-        $updates = $validated;
-
-        if ($validated['decisionPathway'] === 'no_cancer') {
-            $updates['status'] = 'closed';
-            $updates['outcomeDate'] = now()->toDateString();
-        }
-
-        $plan->update($updates);
-
-        // Sync case_outcomes for pathway A too, so analytics reflect a
-        // negative Stage 4 review, not just positive Stage 3 results.
-        if ($plan->client) {
-            CaseOutcome::updateOrCreate(
-                ['clientId' => $plan->client->clientId],
-                $validated['decisionPathway'] === 'no_cancer'
-                    ? ['screeningResult' => 'negative', 'cancerConfirmed' => 'no']
-                    : [],
-            );
-
-            if ($validated['decisionPathway'] === 'no_cancer') {
-                $plan->client->update(['journeyStage' => 'followup']);
-            }
-        }
-
-        return response()->json(['message' => 'Clinical decision recorded.', 'plan' => $plan]);
     }
 
     /**
