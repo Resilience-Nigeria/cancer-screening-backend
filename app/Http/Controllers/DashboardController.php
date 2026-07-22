@@ -462,14 +462,35 @@ class DashboardController extends Controller
 
             $total = $query->count();
 
-            $screenings = $query->orderBy('screeningDate', 'desc')
+            $screeningResults = $query->orderBy('screeningDate', 'desc')
                 ->skip($offset)
                 ->take($limit)
+                ->get();
+
+            $typeClientIds = $screeningResults->pluck('visit.client.clientId')->filter()->unique()->values();
+
+            $stage3Referrals = \App\Models\ClientReferral::whereIn('clientId', $typeClientIds)
+                ->where('referralType', 'screening_to_confirmation')
+                ->orderByDesc('referralId')
                 ->get()
-                ->map(function ($screening) {
+                ->unique('clientId')
+                ->keyBy('clientId');
+
+            $stage3Evaluations = \App\Models\DiagnosticEvaluation::whereIn('clientId', $typeClientIds)
+                ->orderByDesc('evaluationId')
+                ->get()
+                ->unique('clientId')
+                ->keyBy('clientId');
+
+            $screenings = $screeningResults
+                ->map(function ($screening) use ($stage3Referrals, $stage3Evaluations) {
+                    $clientId = $screening->visit->client->clientId ?? null;
+                    $referral = $clientId ? $stage3Referrals->get($clientId) : null;
+                    $evaluation = $clientId ? $stage3Evaluations->get($clientId) : null;
+
                     return [
                         'visitId' => $screening->visitId,
-                        'clientId' => $screening->visit->client->clientId ?? null,
+                        'clientId' => $clientId,
                         'screeningDate' => $screening->screeningDate,
                         'method' => $screening->method ?? null,
                         'result' => $screening->result ?? null,
@@ -484,12 +505,21 @@ class DashboardController extends Controller
                         'biopsyDone' => $screening->biopsyDone ?? null,
                         'biopsyResult' => $screening->biopsyResult ?? null,
                         'created_at' => $screening->created_at,
+                        'stage3Referral' => $referral ? [
+                            'referralId' => $referral->referralId,
+                            'status' => $referral->status,
+                        ] : null,
+                        'stage3Evaluation' => $evaluation ? [
+                            'evaluationId' => $evaluation->evaluationId,
+                            'status' => $evaluation->status,
+                            'decisionPathway' => $evaluation->decisionPathway,
+                        ] : null,
                         'client' => [
-                            'clientId' => $screening->visit->client->clientId ?? null,
+                            'clientId' => $clientId,
                             'fullName' => $screening->visit->client->fullName ?? 'Unknown',
                             'full_name' => $screening->visit->client->fullName ?? 'Unknown',
-                            'screeningId' => $screening->visit->client->clientId ?? '—',
-                            'screening_id' => $screening->visit->client->clientId ?? '—',
+                            'screeningId' => $clientId ?? '—',
+                            'screening_id' => $clientId ?? '—',
                         ],
                     ];
                 });
@@ -799,6 +829,23 @@ public function allScreenings(Request $request): JsonResponse
             ->get();
 
         $visitIds = $visits->pluck('visitId')->all();
+        $screeningClientIds = $visits->pluck('clientId')->filter()->unique()->values();
+
+        // Batch-load Stage 2->3 referral and Stage 3 evaluation status
+        // per client, matching the same pattern used for /visits and
+        // /outcomes.
+        $stage3Referrals = \App\Models\ClientReferral::whereIn('clientId', $screeningClientIds)
+            ->where('referralType', 'screening_to_confirmation')
+            ->orderByDesc('referralId')
+            ->get()
+            ->unique('clientId')
+            ->keyBy('clientId');
+
+        $stage3Evaluations = \App\Models\DiagnosticEvaluation::whereIn('clientId', $screeningClientIds)
+            ->orderByDesc('evaluationId')
+            ->get()
+            ->unique('clientId')
+            ->keyBy('clientId');
 
         // 2) Gather every screening for the visits on this page
         $screeningsByVisit = collect();
@@ -828,7 +875,7 @@ public function allScreenings(Request $request): JsonResponse
         $grouped = $screeningsByVisit->groupBy('visitId');
 
         // 3) Attach the screenings array to each visit
-        $data = $visits->map(function ($v) use ($grouped) {
+        $data = $visits->map(function ($v) use ($grouped, $stage3Referrals, $stage3Evaluations) {
             $items = $grouped->get($v->visitId, collect())->map(function ($s) {
                 return [
                     'screeningType'   => $s['screeningType'],
@@ -838,6 +885,9 @@ public function allScreenings(Request $request): JsonResponse
                 ];
             })->values();
 
+            $referral = $stage3Referrals->get($v->clientId);
+            $evaluation = $stage3Evaluations->get($v->clientId);
+
             return [
                 'visitId'        => $v->visitId,
                 'clientId'       => $v->clientId,
@@ -845,6 +895,15 @@ public function allScreenings(Request $request): JsonResponse
                 'facility'       => $v->facility,
                 'screeningCount' => $items->count(),
                 'screenings'     => $items,
+                'stage3Referral' => $referral ? [
+                    'referralId' => $referral->referralId,
+                    'status' => $referral->status,
+                ] : null,
+                'stage3Evaluation' => $evaluation ? [
+                    'evaluationId' => $evaluation->evaluationId,
+                    'status' => $evaluation->status,
+                    'decisionPathway' => $evaluation->decisionPathway,
+                ] : null,
                 'client'         => [
                     'clientId'     => $v->clientId,
                     'fullName'     => $v->clientName ?? 'Unknown',
