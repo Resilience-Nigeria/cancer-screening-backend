@@ -220,6 +220,8 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/analytics/referral-funnel', [App\Http\Controllers\CancerAnalyticsController::class, 'getReferralFunnel']);
     Route::get('/analytics/timing-metrics', [App\Http\Controllers\CancerAnalyticsController::class, 'getTimingMetrics']);
     Route::get('/analytics/treatment', [App\Http\Controllers\CancerAnalyticsController::class, 'getTreatmentAnalytics']);
+    Route::get('/analytics/socioeconomic', [App\Http\Controllers\CancerAnalyticsController::class, 'getSocioeconomicAnalytics']);
+    Route::get('/indigency-support', [App\Http\Controllers\Api\IndigencySupportController::class, 'index']);
 
 
 });
