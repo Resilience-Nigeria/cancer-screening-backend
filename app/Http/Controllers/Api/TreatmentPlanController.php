@@ -34,7 +34,7 @@ class TreatmentPlanController extends Controller
 
         $evaluations = DiagnosticEvaluation::with('client')
             ->where('status', 'completed')
-            ->whereNotNull('histopathologyResult')
+            ->where('decisionPathway', 'cancer_confirmed')
             ->when($visibleIds !== null, fn ($q) => $q->whereIn('facilityId', $visibleIds))
             ->when($visibleIds === null, fn ($q) => $q->where('facilityId', $facility->facilityId))
             ->whereDoesntHave('client.treatmentPlans')
@@ -153,53 +153,6 @@ class TreatmentPlanController extends Controller
         $plan->update($validated);
 
         return response()->json(['message' => 'Treatment plan updated.', 'plan' => $plan]);
-    }
-
-    /**
-     * 4.2 Final Clinical Decision — Pathway A (No Cancer) or B
-     * (Pre-cancerous). Pathway C (Cancer Confirmed) doesn't close the
-     * plan here — it proceeds through staging/MDT/modalities instead.
-     */
-    public function classifyDecision(Request $request, TreatmentPlan $plan): JsonResponse
-    {
-        if (!$request->user()->canAccessFacility($plan->facilityId)) {
-            return response()->json(['message' => 'Not authorized.'], 403);
-        }
-
-        $validated = $request->validate([
-            'decisionPathway' => 'required|in:no_cancer,pre_cancerous,cancer_confirmed',
-            'managementNotes' => 'nullable|string',
-            'routineRecallDate' => 'nullable|date',
-            'procedurePerformed' => 'nullable|string',
-            'procedureComplications' => 'nullable|string',
-            'surveillanceNotes' => 'nullable|string',
-        ]);
-
-        $updates = $validated;
-
-        if ($validated['decisionPathway'] === 'no_cancer') {
-            $updates['status'] = 'closed';
-            $updates['outcomeDate'] = now()->toDateString();
-        }
-
-        $plan->update($updates);
-
-        // Sync case_outcomes for pathway A too, so analytics reflect a
-        // negative Stage 4 review, not just positive Stage 3 results.
-        if ($plan->client) {
-            CaseOutcome::updateOrCreate(
-                ['clientId' => $plan->client->clientId],
-                $validated['decisionPathway'] === 'no_cancer'
-                    ? ['screeningResult' => 'negative', 'cancerConfirmed' => 'no']
-                    : [],
-            );
-
-            if ($validated['decisionPathway'] === 'no_cancer') {
-                $plan->client->update(['journeyStage' => 'followup']);
-            }
-        }
-
-        return response()->json(['message' => 'Clinical decision recorded.', 'plan' => $plan]);
     }
 
     /**

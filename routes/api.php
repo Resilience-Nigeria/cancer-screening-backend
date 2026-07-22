@@ -116,6 +116,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/diagnostic-evaluations/{evaluation}', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'show']);
     Route::patch('/diagnostic-evaluations/{evaluation}', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'update']);
     Route::post('/diagnostic-evaluations/{evaluation}/pathology', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'finalizePathology']);
+    Route::post('/diagnostic-evaluations/{evaluation}/decision', [App\Http\Controllers\Api\DiagnosticEvaluationController::class, 'classifyDecision']);
 
     // ── Stage 4: Treatment & Care Management ────────────────────────────
     Route::get('/treatment-plans/pending-evaluations', [App\Http\Controllers\Api\TreatmentPlanController::class, 'pendingEvaluations']);
@@ -123,7 +124,6 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::post('/treatment-plans', [App\Http\Controllers\Api\TreatmentPlanController::class, 'store']);
     Route::get('/treatment-plans/{plan}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'show']);
     Route::patch('/treatment-plans/{plan}', [App\Http\Controllers\Api\TreatmentPlanController::class, 'update']);
-    Route::post('/treatment-plans/{plan}/decision', [App\Http\Controllers\Api\TreatmentPlanController::class, 'classifyDecision']);
     Route::post('/treatment-plans/{plan}/outcome', [App\Http\Controllers\Api\TreatmentPlanController::class, 'finalizeOutcome']);
 
     Route::get('/treatment-plans/{plan}/records', [App\Http\Controllers\Api\TreatmentRecordController::class, 'index']);

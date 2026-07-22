@@ -183,6 +183,39 @@ class DiagnosticEvaluationController extends Controller
             'completedAt' => now(),
         ]);
 
+        return response()->json([
+            'message' => 'Pathology result recorded.',
+            'evaluation' => $evaluation,
+        ]);
+    }
+
+    /**
+     * 4.2 Final Clinical Decision — moved here from Stage 4, since the
+     * pathology result above already determines this classification.
+     * This is the actual clinical decision point: it closes the
+     * referral, advances the client's journey stage, and syncs
+     * case_outcomes, so downstream stages (Stage 4's pending-evaluations
+     * inbox) only ever see cases the clinician has confirmed.
+     */
+    public function classifyDecision(Request $request, DiagnosticEvaluation $evaluation): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user->canAccessFacility($evaluation->facilityId)) {
+            return response()->json(['message' => 'Not authorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'decisionPathway' => 'required|in:no_cancer,pre_cancerous,cancer_confirmed',
+            'managementNotes' => 'nullable|string',
+            'routineRecallDate' => 'nullable|date',
+            'procedurePerformed' => 'nullable|string',
+            'procedureComplications' => 'nullable|string',
+            'surveillanceNotes' => 'nullable|string',
+        ]);
+
+        $evaluation->update($validated);
+
         $client = $evaluation->client;
 
         if ($evaluation->referralId) {
@@ -192,7 +225,7 @@ class DiagnosticEvaluationController extends Controller
 
         if ($client) {
             $client->update([
-                'journeyStage' => $evaluation->histopathologyResult === 'malignant' ? 'treatment' : 'followup',
+                'journeyStage' => $validated['decisionPathway'] === 'cancer_confirmed' ? 'treatment' : 'followup',
             ]);
 
             // Sync into case_outcomes so analytics built on that table
@@ -201,7 +234,7 @@ class DiagnosticEvaluationController extends Controller
             CaseOutcome::updateOrCreate(
                 ['clientId' => $client->clientId],
                 [
-                    'cancerConfirmed' => $evaluation->histopathologyResult === 'malignant' ? 'yes' : 'no',
+                    'cancerConfirmed' => $validated['decisionPathway'] === 'cancer_confirmed' ? 'yes' : 'no',
                     'cancerType' => $evaluation->suspectedCancerType,
                     'diagnosisDate' => $evaluation->pathologyDate,
                     'diagnosis' => $evaluation->histopathologyResult,
@@ -211,7 +244,7 @@ class DiagnosticEvaluationController extends Controller
         }
 
         return response()->json([
-            'message' => 'Pathology result recorded — evaluation complete.',
+            'message' => 'Clinical decision recorded.',
             'evaluation' => $evaluation,
         ]);
     }
