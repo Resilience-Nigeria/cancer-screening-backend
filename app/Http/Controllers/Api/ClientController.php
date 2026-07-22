@@ -7,6 +7,7 @@ use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
 use App\Http\Requests\SearchClientRequest;
 use App\Models\Client;
+use App\Models\ClientReferral;
 use App\Models\Facility;
 use App\Services\LgaCodeMapping;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +34,44 @@ class ClientController extends Controller
             ->latest();
 
         return response()->json($query->paginate(20));
+    }
+
+    /**
+     * Clients currently linked/referred to my facility — the default
+     * "inbox" view of who's been sent here from a previous stage.
+     *
+     * Hub facilities get a "history" mode: instead of only pending/
+     * accepted referrals, load every referral of a selected stage
+     * transition (including completed ones), so a Hub can see its full
+     * referral history rather than just the current queue.
+     */
+    public function linked(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+        $facility = $user->facility;
+        $visibleIds = $user->visibleFacilityIds();
+
+        $isHub = $facility && $facility->facilityLevel === 'hub';
+        $historyMode = $isHub && $request->boolean('history');
+
+        $referralsQuery = ClientReferral::with(['client.facility', 'fromFacility', 'toFacility'])
+            ->when($visibleIds !== null, fn ($q) => $q->whereIn('toFacilityId', $visibleIds))
+            ->when($visibleIds === null && $facility, fn ($q) => $q->where('toFacilityId', $facility->facilityId));
+
+        if (!$historyMode) {
+            $referralsQuery->whereIn('status', ['pending', 'accepted']);
+        }
+
+        if ($request->filled('stage')) {
+            $referralsQuery->where('referralType', $request->stage);
+        }
+
+        $referrals = $referralsQuery->latest('referralDate')->paginate(20);
+
+        return response()->json([
+            'referrals' => $referrals,
+            'isHub' => $isHub,
+        ]);
     }
 
     public function store(StoreClientRequest $request): JsonResponse
