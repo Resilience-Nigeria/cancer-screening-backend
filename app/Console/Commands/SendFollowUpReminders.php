@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\FollowUpSchedule;
+use App\Models\Setting;
 use App\Services\BrevoService;
 use App\Services\BulkSmsService;
 use App\Services\WhatsAppService;
@@ -32,15 +33,42 @@ class SendFollowUpReminders extends Command
     }
 
     /**
-     * Remind clients whose follow-up is due in the next 7 days and
-     * hasn't already had a reminder sent.
+     * Resolves the configured SMS provider to its service instance.
+     * Adding a new provider later is a case here, not a rewire of every
+     * caller that sends an SMS.
+     */
+    protected function sendSms(string $to, string $message): bool
+    {
+        return match (Setting::get('sms_provider', 'bulksms')) {
+            'bulksms' => $this->bulkSms->send($to, $message),
+            default => $this->bulkSms->send($to, $message),
+        };
+    }
+
+    /**
+     * Same pattern for email.
+     */
+    protected function sendEmail(string $to, string $name, string $subject, string $message): bool
+    {
+        return match (Setting::get('email_provider', 'brevo')) {
+            'brevo' => $this->brevo->sendTransactional(to: $to, name: $name, subject: $subject, message: $message),
+            default => $this->brevo->sendTransactional(to: $to, name: $name, subject: $subject, message: $message),
+        };
+    }
+
+    /**
+     * Remind clients whose follow-up is due within the configured
+     * window and hasn't already had a reminder sent.
      */
     protected function sendUpcomingReminders(): void
     {
+        $daysBefore = Setting::get('follow_up_reminder_days_before', 7);
+        $whatsappEnabled = Setting::get('whatsapp_enabled', true);
+
         $upcoming = FollowUpSchedule::with('treatmentPlan.client')
             ->where('status', 'pending')
             ->whereNull('reminderSentAt')
-            ->whereBetween('dueDate', [now()->toDateString(), now()->addDays(7)->toDateString()])
+            ->whereBetween('dueDate', [now()->toDateString(), now()->addDays($daysBefore)->toDateString()])
             ->get();
 
         foreach ($upcoming as $schedule) {
@@ -52,17 +80,12 @@ class SendFollowUpReminders extends Command
             $message = "Hello {$client->fullName}, this is a reminder that your follow-up appointment "
                 . "({$schedule->activities}) is due on {$schedule->dueDate}. Please contact your facility to schedule your visit.";
 
-            $sent = $this->whatsapp->send($client->phoneNumber, $message);
+            $sent = $whatsappEnabled ? $this->whatsapp->send($client->phoneNumber, $message) : false;
             if (!$sent) {
-                $sent = $this->bulkSms->send($client->phoneNumber, $message);
+                $sent = $this->sendSms($client->phoneNumber, $message);
             }
             if (!$sent && $client->email) {
-                $this->brevo->sendTransactional(
-                    to: $client->email,
-                    name: $client->fullName,
-                    subject: 'Upcoming Follow-up Appointment',
-                    message: $message,
-                );
+                $this->sendEmail($client->email, $client->fullName, 'Upcoming Follow-up Appointment', $message);
             }
 
             $schedule->update(['reminderSentAt' => now()]);
@@ -74,13 +97,15 @@ class SendFollowUpReminders extends Command
     }
 
     /**
-     * Anything more than 14 days past due and still pending gets
-     * flagged as missed.
+     * Anything more than the configured window past due and still
+     * pending gets flagged as missed.
      */
     protected function flagMissedFollowUps(): void
     {
+        $missedAfterDays = Setting::get('follow_up_missed_after_days', 14);
+
         $missedCount = FollowUpSchedule::where('status', 'pending')
-            ->where('dueDate', '<', now()->subDays(14)->toDateString())
+            ->where('dueDate', '<', now()->subDays($missedAfterDays)->toDateString())
             ->update(['status' => 'missed']);
 
         $this->info("Flagged {$missedCount} follow-ups as missed.");
@@ -107,12 +132,7 @@ class SendFollowUpReminders extends Command
                 $message = "URGENT: {$client?->fullName} ({$client?->clientId}) has a missed follow-up "
                     . "that was due on {$schedule->dueDate} ({$schedule->activities}). Please follow up urgently.";
 
-                $this->brevo->sendTransactional(
-                    to: $facility->email,
-                    name: $facility->facilityName,
-                    subject: 'Overdue Follow-up Escalation',
-                    message: $message,
-                );
+                $this->sendEmail($facility->email, $facility->facilityName, 'Overdue Follow-up Escalation', $message);
             }
 
             $schedule->update(['escalationSentAt' => now()]);
