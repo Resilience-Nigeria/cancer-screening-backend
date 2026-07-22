@@ -17,15 +17,35 @@ class BulkSmsService
     protected string $baseUrl;
     protected string $apiToken;
     protected string $senderId;
+    protected bool $resolved = false;
 
     public function __construct()
     {
-        $dbProvider = \App\Models\NotificationProvider::where('channel', 'sms')
-            ->where('providerKey', 'bulksms')
-            ->where('isActive', true)
-            ->first();
+        // Credential resolution is deferred to resolveConfig(), called
+        // from send() — not done here. Laravel's console kernel can
+        // resolve this class for ANY artisan command (it's a dependency
+        // of SendFollowUpReminders), including `migrate` itself —
+        // querying notification_providers in the constructor meant a
+        // fresh `php artisan migrate` failed before the table existed.
+    }
 
-        $dbConfig = $dbProvider?->config ?? [];
+    protected function resolveConfig(): void
+    {
+        if ($this->resolved) {
+            return;
+        }
+        $this->resolved = true;
+
+        $dbConfig = [];
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('notification_providers')) {
+            $dbProvider = \App\Models\NotificationProvider::where('channel', 'sms')
+                ->where('providerKey', 'bulksms')
+                ->where('isActive', true)
+                ->first();
+
+            $dbConfig = $dbProvider?->config ?? [];
+        }
 
         $sandbox = $dbConfig['sandbox'] ?? (bool) config('services.bulksms_nigeria.sandbox');
 
@@ -42,6 +62,8 @@ class BulkSmsService
      */
     public function send(string $to, string $message): bool
     {
+        $this->resolveConfig();
+
         $to = $this->normalizeNumber($to);
 
         if (!$this->apiToken) {
