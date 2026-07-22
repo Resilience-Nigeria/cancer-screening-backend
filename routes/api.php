@@ -209,6 +209,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/analytics/facility-performance', [App\Http\Controllers\CancerAnalyticsController::class, 'getFacilityPerformance']);
     Route::get('/analytics/referral-funnel', [App\Http\Controllers\CancerAnalyticsController::class, 'getReferralFunnel']);
     Route::get('/analytics/timing-metrics', [App\Http\Controllers\CancerAnalyticsController::class, 'getTimingMetrics']);
+    Route::get('/analytics/treatment', [App\Http\Controllers\CancerAnalyticsController::class, 'getTreatmentAnalytics']);
 
 
 });
