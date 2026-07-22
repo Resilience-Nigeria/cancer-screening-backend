@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpsertCaseOutcomeRequest;
 use App\Models\CaseOutcome;
 use App\Models\Client;
+use App\Models\DiagnosticEvaluation;
+use App\Models\TreatmentPlan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,9 +29,18 @@ class OutcomeController extends Controller
                 'data' => null
             ]);
         }
+
+        $latestEvaluation = DiagnosticEvaluation::where('clientId', $clientId)
+            ->where('status', 'completed')
+            ->latest('pathologyDate')
+            ->first();
+
+        $latestPlan = TreatmentPlan::where('clientId', $clientId)
+            ->latest('treatmentPlanId')
+            ->first();
         
         return response()->json([
-            'data' => $this->formatOutcome($outcome)
+            'data' => $this->formatOutcome($outcome, $latestEvaluation, $latestPlan)
         ]);
     }
     
@@ -94,7 +105,14 @@ class OutcomeController extends Controller
         $search = $request->input('search');
         $status = $request->input('status');
         
+        $user = $request->user();
+        $visibleIds = $user->visibleFacilityIds();
+
         $query = CaseOutcome::with('client')->orderBy('updated_at', 'desc');
+
+        if ($visibleIds !== null) {
+            $query->whereHas('client', fn ($q) => $q->whereIn('facilityId', $visibleIds));
+        }
         
         // Apply search filter
         if ($search) {
@@ -131,10 +149,31 @@ class OutcomeController extends Controller
         }
         
         $outcomes = $query->paginate($perPage);
-        
+
+        // Batch-load latest Stage 3 evaluation and Stage 4 treatment
+        // plan per client, keyed by clientId, to avoid N+1 queries.
+        $clientIds = $outcomes->pluck('clientId')->filter()->unique()->values();
+
+        $latestEvaluations = DiagnosticEvaluation::whereIn('clientId', $clientIds)
+            ->where('status', 'completed')
+            ->orderByDesc('pathologyDate')
+            ->get()
+            ->unique('clientId')
+            ->keyBy('clientId');
+
+        $latestPlans = TreatmentPlan::whereIn('clientId', $clientIds)
+            ->orderByDesc('treatmentPlanId')
+            ->get()
+            ->unique('clientId')
+            ->keyBy('clientId');
+
         return response()->json([
-            'data' => $outcomes->map(function ($outcome) {
-                return $this->formatOutcome($outcome);
+            'data' => $outcomes->map(function ($outcome) use ($latestEvaluations, $latestPlans) {
+                return $this->formatOutcome(
+                    $outcome,
+                    $latestEvaluations->get($outcome->clientId),
+                    $latestPlans->get($outcome->clientId),
+                );
             }),
             'total' => $outcomes->total(),
             'per_page' => $outcomes->perPage(),
@@ -183,7 +222,7 @@ class OutcomeController extends Controller
      * @param CaseOutcome $outcome
      * @return array
      */
-    private function formatOutcome(CaseOutcome $outcome): array
+    private function formatOutcome(CaseOutcome $outcome, ?DiagnosticEvaluation $evaluation = null, ?TreatmentPlan $plan = null): array
     {
         // Decode JSON fields
         $missedAppointmentReasons = [];
@@ -279,6 +318,23 @@ class OutcomeController extends Controller
                 'full_name' => $outcome->client->fullName,
                 'screeningId' => $outcome->client->screeningId,
                 'screening_id' => $outcome->client->screeningId,
+            ] : null,
+
+            // Stage 3/4 status — lets the outcomes list link straight to
+            // the richer structured record instead of only showing the
+            // legacy manually-entered fields above.
+            'stage3Evaluation' => $evaluation ? [
+                'evaluationId' => $evaluation->evaluationId,
+                'status' => $evaluation->status,
+                'suspectedCancerType' => $evaluation->suspectedCancerType,
+                'histopathologyResult' => $evaluation->histopathologyResult,
+                'decisionPathway' => $evaluation->decisionPathway,
+            ] : null,
+            'stage4TreatmentPlan' => $plan ? [
+                'treatmentPlanId' => $plan->treatmentPlanId,
+                'status' => $plan->status,
+                'treatmentIntent' => $plan->treatmentIntent,
+                'treatmentOutcome' => $plan->treatmentOutcome,
             ] : null,
         ];
     }

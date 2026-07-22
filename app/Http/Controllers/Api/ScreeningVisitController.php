@@ -7,6 +7,8 @@ use App\Http\Requests\StoreScreeningVisitRequest;
 use App\Http\Requests\StoreVisitExaminationRequest;
 use App\Http\Requests\StoreOutcomeClassificationRequest;
 use App\Models\Client;
+use App\Models\ClientReferral;
+use App\Models\DiagnosticEvaluation;
 use App\Models\ScreeningVisit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,6 +39,7 @@ class ScreeningVisitController extends Controller
 
  public function index(Request $request)
     {
+        $user = $request->user();
         $page = $request->input('page', 1);
         $search = $request->input('search', '');
         $visitType = $request->input('visitType', '');
@@ -48,6 +51,14 @@ class ScreeningVisitController extends Controller
 
         $query = ScreeningVisit::with(['client.facility', 'cervicalScreening', 'breastScreening', 
                               'prostateScreening', 'colorectalScreening', 'liverScreening']);
+
+        // Facility scoping — this endpoint had none before, meaning any
+        // authenticated user could see every visit nationally regardless
+        // of role.
+        $visibleIds = $user->visibleFacilityIds();
+        if ($visibleIds !== null) {
+            $query->whereHas('client', fn ($q) => $q->whereIn('facilityId', $visibleIds));
+        }
 
         // Apply search
         if ($search) {
@@ -82,6 +93,40 @@ class ScreeningVisitController extends Controller
                         ->skip($offset)
                         ->take($limit)
                         ->get();
+
+        // Batch-load Stage 2→3 referral and Stage 3 evaluation status
+        // per client, so the visits list can show whether a visit led
+        // to a referral without a separate lookup per row.
+        $clientIds = $visits->pluck('client.clientId')->filter()->unique()->values();
+
+        $referrals = ClientReferral::whereIn('clientId', $clientIds)
+            ->where('referralType', 'screening_to_confirmation')
+            ->orderByDesc('referralId')
+            ->get()
+            ->unique('clientId')
+            ->keyBy('clientId');
+
+        $evaluations = DiagnosticEvaluation::whereIn('clientId', $clientIds)
+            ->orderByDesc('evaluationId')
+            ->get()
+            ->unique('clientId')
+            ->keyBy('clientId');
+
+        $visits->each(function ($visit) use ($referrals, $evaluations) {
+            $clientId = $visit->client?->clientId;
+            $referral = $clientId ? $referrals->get($clientId) : null;
+            $evaluation = $clientId ? $evaluations->get($clientId) : null;
+
+            $visit->stage3Referral = $referral ? [
+                'referralId' => $referral->referralId,
+                'status' => $referral->status,
+            ] : null;
+            $visit->stage3Evaluation = $evaluation ? [
+                'evaluationId' => $evaluation->evaluationId,
+                'status' => $evaluation->status,
+                'decisionPathway' => $evaluation->decisionPathway,
+            ] : null;
+        });
 
         return response()->json([
             'data' => $visits,
