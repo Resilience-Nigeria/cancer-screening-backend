@@ -15,8 +15,10 @@ class UpsertRiskProfileRequest extends FormRequest
     {
         return [
             'familyHistory' => ['required', 'in:yes,no,unknown'],
-            'smokingStatus' => ['nullable', 'in:non_smoker,active_smoker,passive_smoker,ocassional,former_smoker'],
-            'alcoholConsumption' => ['nullable', 'in:none,occasionally,regularly,weekly,daily,never'],
+            'smokingStatus' => ['nullable', 'in:non_smoker,never,active_smoker,current_smoker,passive_smoker,ocassional,occasional,former_smoker,ex_smoker'],
+            'alcoholConsumption' => ['nullable', 'in:none,never,non_drinker,occasional,occasionally,light_drinker,regular,regularly,weekly,daily,heavy_drinker'],
+            'physicalActivityLevel' => ['nullable', 'in:regular,sometimes,rarely'],
+            'occupationCategory' => ['nullable', 'string', 'max:10'],
             'weightKg' => ['nullable', 'numeric', 'min:0'],
             'heightCm' => ['nullable', 'numeric', 'min:0'],
             'hivStatus' => ['nullable', 'in:positive,negative,unknown'],
