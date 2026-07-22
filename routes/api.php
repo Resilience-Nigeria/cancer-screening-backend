@@ -190,6 +190,8 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::get('/users/roles', [UserController::class, 'roles']);
     Route::get('/roles', [App\Http\Controllers\Api\RoleController::class, 'index']);
     Route::patch('/roles/{role}/scope', [App\Http\Controllers\Api\RoleController::class, 'updateScope']);
+    Route::get('/settings', [App\Http\Controllers\Api\SettingsController::class, 'index']);
+    Route::patch('/settings', [App\Http\Controllers\Api\SettingsController::class, 'update']);
     Route::get('/users/{user}/facility-grants', [App\Http\Controllers\Api\UserFacilityGrantController::class, 'index']);
     Route::post('/users/{user}/facility-grants', [App\Http\Controllers\Api\UserFacilityGrantController::class, 'store']);
     Route::delete('/users/{user}/facility-grants/{facilityId}', [App\Http\Controllers\Api\UserFacilityGrantController::class, 'destroy']);
