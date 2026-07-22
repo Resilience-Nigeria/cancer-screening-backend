@@ -56,7 +56,14 @@ class DiagnosticEvaluationController extends Controller
         $client = Client::with(['latestRiskProfile', 'visits' => function ($q) {
             $q->with(['breastScreening', 'cervicalScreening', 'prostateScreening', 'colorectalScreening', 'liverScreening'])
               ->orderByDesc('visitDate');
-        }])->where('clientId', $clientId)->firstOrFail();
+        }])
+            ->where('clientId', $clientId)
+            ->orWhere('phoneNumber', $clientId)
+            ->first();
+
+        if (!$client) {
+            return response()->json(['message' => 'No client found with that ID or phone number.'], 404);
+        }
 
         if (!$request->user()->canAccessFacility($client->facilityId)) {
             return response()->json(['message' => 'Not authorized to view this client.'], 403);
