@@ -90,6 +90,11 @@ protected $keyType = 'string';
         return $this->hasMany(DiagnosticEvaluation::class, 'clientId', 'clientId');
     }
 
+    public function treatmentPlans(): HasMany
+    {
+        return $this->hasMany(TreatmentPlan::class, 'clientId', 'clientId');
+    }
+
     public function getAgeAttribute(): ?int
     {
         return $this->dateOfBirth ? Carbon::parse($this->dateOfBirth)->age : null;
