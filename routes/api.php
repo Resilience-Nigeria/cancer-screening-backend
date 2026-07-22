@@ -96,6 +96,7 @@ Route::patch('/referrals/{referral}/status', [ClientReferralController::class, '
     Route::post('/clients', [ClientController::class, 'store']);
     Route::get('/clients/search/details', [ClientController::class, 'search']);
     Route::get('/clients/check-duplicate', [ClientController::class, 'checkDuplicate']);
+    Route::get('/clients/linked', [ClientController::class, 'linked']);
     Route::get('/clients/{client}', [ClientController::class, 'show']);
     Route::patch('/clients/{client}', [ClientController::class, 'update']);
 

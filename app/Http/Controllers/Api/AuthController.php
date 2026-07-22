@@ -104,6 +104,7 @@ class AuthController extends Controller
                 'facilityState'   => $user->facility->facilityState ?? null,
                 'facilityLga'     => $user->facility->facilityLga ?? null,
                 'facilityAddress' => $user->facility->facilityAddress ?? null,
+                'facilityLevel'   => $user->facility->facilityLevel ?? null,
             ];
         } else {
             $userData['facility'] = null;
@@ -166,6 +167,7 @@ class AuthController extends Controller
                 'facilityState'   => $user->facility->facilityState ?? null,
                 'facilityLga'     => $user->facility->facilityLga ?? null,
                 'facilityAddress' => $user->facility->facilityAddress ?? null,
+                'facilityLevel'   => $user->facility->facilityLevel ?? null,
             ];
         } else {
             $userData['facility'] = null;
