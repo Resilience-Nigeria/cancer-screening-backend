@@ -70,10 +70,19 @@ class TreatmentPlanController extends Controller
             ->latest('pathologyDate')
             ->first();
 
+        // If a treatment plan already exists for this client, return it
+        // too — the frontend uses this to resume/prefill an in-progress
+        // plan rather than always starting blank.
+        $existingPlan = \App\Models\TreatmentPlan::where('clientId', $client->clientId)
+            ->with(['treatmentRecords', 'followUpSchedules'])
+            ->latest('treatmentPlanId')
+            ->first();
+
         return response()->json([
             'client' => $client,
             'riskProfile' => $client->latestRiskProfile,
             'evaluation' => $latestEvaluation,
+            'existingPlan' => $existingPlan,
         ]);
     }
 
