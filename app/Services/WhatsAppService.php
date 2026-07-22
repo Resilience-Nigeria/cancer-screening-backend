@@ -15,21 +15,39 @@ class WhatsAppService
 
     public function __construct()
     {
-        $sid           = config('services.twilio.sid',        '');
-        $authToken     = config('services.twilio.auth_token', '');
-        $this->from    = config('services.twilio.whatsapp_from', '');
-        $this->enabled = config('services.twilio.whatsapp_enabled', true);
+        $dbProvider = \App\Models\NotificationProvider::where('channel', 'whatsapp')
+            ->where('providerKey', 'whatsapp_meta')
+            ->where('isActive', true)
+            ->first();
 
-        if (empty($sid) || empty($authToken)) {
-            Log::warning('WhatsAppService: Twilio credentials not configured.');
-            return;
-        }
+        $dbConfig = $dbProvider?->config ?? [];
 
-        try {
-            $this->client = new TwilioClient($sid, $authToken);
-        } catch (\Throwable $e) {
-            Log::error('WhatsAppService: Failed to initialize Twilio client.', [
-                'error' => $e->getMessage(),
+        $this->apiUrl        = $dbConfig['apiUrl'] ?: config('services.whatsapp.api_url');
+        $this->apiToken      = $dbConfig['token'] ?: config('services.whatsapp.token');
+        $this->phoneNumberId = $dbConfig['phoneNumberId'] ?: config('services.whatsapp.phone_number_id');
+    }
+
+    /**
+     * Send a plain-text WhatsApp message.
+     */
+    public function send(string $to, string $message): bool
+{
+    $to = $this->normalizeNumber($to);
+
+    Log::info('WhatsApp send attempt', [
+        'to'             => $to,
+        'phone_number_id'=> $this->phoneNumberId,
+        'api_url'        => $this->apiUrl,
+        'message_length' => strlen($message),
+    ]);
+
+    try {
+        $response = Http::withToken($this->apiToken)
+            ->post("{$this->apiUrl}/{$this->phoneNumberId}/messages", [
+                'messaging_product' => 'whatsapp',
+                'to'                => $to,
+                'type'              => 'text',
+                'text'              => ['body' => $message],
             ]);
         }
     }

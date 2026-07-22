@@ -23,9 +23,10 @@ return new class extends Migration {
         Schema::create('diagnostic_evaluations', function (Blueprint $table) {
             $table->id('evaluationId');
             $table->string('clientId')->nullable();
-            $table->unsignedBigInteger('facilityId');
+            $table->unsignedBigInteger('facilityId')->nullable();
             $table->unsignedBigInteger('referralId')->nullable();
-            $table->date('evaluationDate');
+            $table->date('evaluationDate')->nullable();
+            
 
             $table->enum('suspectedCancerType', [
                 'breast', 'cervical', 'prostate', 'colorectal', 'lung', 'liver', 'oral',

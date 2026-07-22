@@ -33,13 +33,16 @@ class SendFollowUpReminders extends Command
     }
 
     /**
-     * Resolves the configured SMS provider to its service instance.
-     * Adding a new provider later is a case here, not a rewire of every
-     * caller that sends an SMS.
+     * Resolves whichever provider is marked default for this channel in
+     * notification_providers. Adding a new provider later is a case
+     * here once its Service class exists, not a rewire of every caller
+     * that sends an SMS.
      */
     protected function sendSms(string $to, string $message): bool
     {
-        return match (Setting::get('sms_provider', 'bulksms')) {
+        $provider = \App\Models\NotificationProvider::getDefault('sms');
+
+        return match ($provider?->providerKey ?? 'bulksms') {
             'bulksms' => $this->bulkSms->send($to, $message),
             default => $this->bulkSms->send($to, $message),
         };
@@ -50,7 +53,9 @@ class SendFollowUpReminders extends Command
      */
     protected function sendEmail(string $to, string $name, string $subject, string $message): bool
     {
-        return match (Setting::get('email_provider', 'brevo')) {
+        $provider = \App\Models\NotificationProvider::getDefault('email');
+
+        return match ($provider?->providerKey ?? 'brevo') {
             'brevo' => $this->brevo->sendTransactional(to: $to, name: $name, subject: $subject, message: $message),
             default => $this->brevo->sendTransactional(to: $to, name: $name, subject: $subject, message: $message),
         };
