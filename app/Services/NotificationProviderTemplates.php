@@ -31,7 +31,7 @@ class NotificationProviderTemplates
                 ],
                 'twilio' => [
                     'name' => 'Twilio',
-                    'implemented' => false,
+                    'implemented' => true,
                     'fields' => [
                         'accountSid' => 'Account SID',
                         'authToken' => 'Auth Token',

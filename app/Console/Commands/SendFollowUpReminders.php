@@ -6,6 +6,7 @@ use App\Models\FollowUpSchedule;
 use App\Models\Setting;
 use App\Services\BrevoService;
 use App\Services\BulkSmsService;
+use App\Services\TwilioSmsService;
 use App\Services\WhatsAppService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +19,7 @@ class SendFollowUpReminders extends Command
     public function __construct(
         protected WhatsAppService $whatsapp,
         protected BulkSmsService $bulkSms,
+        protected TwilioSmsService $twilioSms,
         protected BrevoService $brevo,
     ) {
         parent::__construct();
@@ -43,6 +45,7 @@ class SendFollowUpReminders extends Command
         $provider = \App\Models\NotificationProvider::getDefault('sms');
 
         return match ($provider?->providerKey ?? 'bulksms') {
+            'twilio' => $this->twilioSms->send($to, $message),
             'bulksms' => $this->bulkSms->send($to, $message),
             default => $this->bulkSms->send($to, $message),
         };

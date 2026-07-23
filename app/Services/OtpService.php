@@ -12,7 +12,23 @@ class OtpService
         protected WhatsAppService $whatsapp,
         protected BrevoService $brevo,
         protected BulkSmsService $bulkSms,
+        protected TwilioSmsService $twilioSms,
     ) {}
+
+    /**
+     * Resolves the configured default SMS provider — adding a new
+     * provider later is a case here, not a rewire of every caller.
+     */
+    protected function sendSms(string $to, string $message): bool
+    {
+        $provider = \App\Models\NotificationProvider::getDefault('sms');
+
+        return match ($provider?->providerKey ?? 'bulksms') {
+            'twilio' => $this->twilioSms->send($to, $message),
+            'bulksms' => $this->bulkSms->send($to, $message),
+            default => $this->bulkSms->send($to, $message),
+        };
+    }
 
     /**
      * Generate and send OTP to phone (WhatsApp) and email (if provided).
@@ -63,7 +79,7 @@ class OtpService
         $smsSent = false;
         if (!$whatsappSent) {
             $smsMessage = "Your NCSR {$action} code is {$otp}. It expires in 10 minutes. Do not share it with anyone.";
-            $smsSent = $this->bulkSms->send($phoneNumber, $smsMessage);
+            $smsSent = $this->sendSms($phoneNumber, $smsMessage);
 
             if (!$smsSent) {
                 Log::error('OTP SMS (BulkSMS Nigeria) send failed', [
