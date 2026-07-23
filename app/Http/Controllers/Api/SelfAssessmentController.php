@@ -39,12 +39,13 @@ class SelfAssessmentController extends Controller
             'recommendation' => $result['recommendation'],
             'flaggedReasons' => $result['flaggedReasons'],
             'suggestedCancerTypes' => $result['suggestedCancerTypes'],
-            'facility' => $registration->facility?->only([
-                'facilityName',
-                'facilityAddress',
-                'navigatorName',
-                'navigatorPhone',
-            ]),
+            'facility' => $registration->facility ? [
+                'facilityName' => $registration->facility->facilityName,
+                'facilityAddress' => $registration->facility->facilityAddress,
+                'navigatorName' => $registration->facility->navigatorName,
+                'navigatorPhone' => $registration->facility->navigatorPhone,
+                'clinicHoursDisplay' => $registration->facility->formatClinicHours(),
+            ] : null,
         ], 201);
     }
 

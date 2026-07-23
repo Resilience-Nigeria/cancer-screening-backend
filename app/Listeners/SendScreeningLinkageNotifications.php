@@ -26,11 +26,14 @@ class SendScreeningLinkageNotifications
         'whatsapp_no' => $facility->whatsappNumber ?? 'MISSING',
     ]);
 
+    $clinicHours = $facility->formatClinicHours();
+
     $clientMessage =
         "Hello {$client->fullName}, you have been linked to "
         . "{$facility->facilityName} for your cancer screening. "
-        . "Address: {$facility->facilityAddress}. "
-        . "Contact: {$facility->navigatorName} — {$facility->navigatorPhone}.";
+        . "Address: {$facility->facilityAddress}."
+        . ($clinicHours ? " Clinic hours: {$clinicHours}." : "")
+        . " Contact: {$facility->navigatorName} — {$facility->navigatorPhone}.";
 
     if ($client->email) {
         $this->brevo->sendTransactional(

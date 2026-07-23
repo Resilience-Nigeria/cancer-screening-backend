@@ -19,6 +19,9 @@ class Facility extends Model
         'facilityState',
         'facilityLga',
         'facilityAddress',
+        'clinicDays',
+        'clinicOpenTime',
+        'clinicCloseTime',
         'phoneNumber',
         'email',
         'status',
@@ -43,6 +46,7 @@ class Facility extends Model
         'isTreatmentCenter' => 'boolean',
         'facilityType' => 'array',
         'stagesSupported' => 'array',
+        'clinicDays' => 'array',
         'latitude' => 'float',
         'longitude' => 'float',
         'isActive' => 'boolean',
@@ -72,6 +76,29 @@ class Facility extends Model
      * admin can configure any facility's capabilities without a
      * code change.
      */
+    /**
+     * Friendly one-line clinic days/hours string for display in the
+     * client-facing UI and in email/SMS notifications, e.g.
+     * "Mon, Wed, Fri · 9:00 AM - 4:00 PM". Returns null if nothing is
+     * configured, so callers can omit the line entirely rather than
+     * showing an empty/broken string.
+     */
+    public function formatClinicHours(): ?string
+    {
+        $days = is_array($this->clinicDays) ? $this->clinicDays : [];
+        $daysPart = !empty($days) ? implode(', ', $days) : null;
+
+        $hoursPart = ($this->clinicOpenTime && $this->clinicCloseTime)
+            ? "{$this->clinicOpenTime} - {$this->clinicCloseTime}"
+            : null;
+
+        if (!$daysPart && !$hoursPart) {
+            return null;
+        }
+
+        return implode(' · ', array_filter([$daysPart, $hoursPart]));
+    }
+
     public function supportsStage(string $stage): bool
     {
         return in_array($stage, $this->stagesSupported ?? [], true);
