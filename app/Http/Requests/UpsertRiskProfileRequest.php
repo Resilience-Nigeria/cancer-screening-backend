@@ -11,6 +11,36 @@ class UpsertRiskProfileRequest extends FormRequest
         return true;
     }
 
+    /**
+     * Numeric fields sent as an empty string (very common from a number
+     * input left blank, e.g. age at menopause for a client who is male
+     * or hasn't reached menopause) need to become null before
+     * validation - Laravel's `nullable` rule only skips validation for
+     * an actual null value, not an empty string, so "" still fails an
+     * `integer`/`numeric` check even with `nullable` present.
+     */
+    protected function prepareForValidation(): void
+    {
+        $numericFields = [
+            'ageAtFirstMenstruation',
+            'ageAtMenopause',
+            'weightKg',
+            'heightCm',
+            'breastfeedingDuration',
+        ];
+
+        $normalized = [];
+        foreach ($numericFields as $field) {
+            if ($this->has($field) && trim((string) $this->input($field)) === '') {
+                $normalized[$field] = null;
+            }
+        }
+
+        if ($normalized) {
+            $this->merge($normalized);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -26,8 +56,8 @@ class UpsertRiskProfileRequest extends FormRequest
             'hcvStatus' => ['nullable', 'in:positive,negative,unknown'],
             'comorbiditiesJson' => ['nullable', 'array'],
             'comorbiditiesJson.*' => ['string'],
-            'ageAtFirstMenstruation' => ['string'],
-            'ageAtMenopause' => ['string'],
+            'ageAtFirstMenstruation' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'ageAtMenopause' => ['nullable', 'integer', 'min:0', 'max:100'],
             'breastfeedingHistory' => ['nullable', 'in:yes,no'],
             'breastfeedingDuration' => ['nullable', 'integer', 'min:0', 'max:1200'],
             'previousBreastSurgery' => ['nullable', 'in:yes,no'],
