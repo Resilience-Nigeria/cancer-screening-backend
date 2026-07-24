@@ -4,16 +4,32 @@
 namespace App\Listeners;
 
 use App\Events\ClientReferredToMainHub;
+use App\Models\NotificationProvider;
 use App\Services\BrevoService;
 use App\Services\WhatsAppService;
-use Illuminate\Support\Facades\Log;  
+use App\Services\BulkSmsService;
+use App\Services\TwilioSmsService;
+use Illuminate\Support\Facades\Log;
 
 class SendMainHubReferralNotifications
 {
     public function __construct(
         protected BrevoService $brevo,
         protected WhatsAppService $whatsapp,
+        protected BulkSmsService $bulkSms,
+        protected TwilioSmsService $twilioSms,
     ) {}
+
+    protected function sendSms(string $to, string $message): bool
+    {
+        $provider = NotificationProvider::getDefault('sms');
+
+        return match ($provider?->providerKey ?? 'bulksms') {
+            'twilio' => $this->twilioSms->send($to, $message),
+            'bulksms' => $this->bulkSms->send($to, $message),
+            default => $this->bulkSms->send($to, $message),
+        };
+    }
 
     public function handle(ClientReferredToMainHub $event): void
     {
@@ -32,6 +48,13 @@ class SendMainHubReferralNotifications
             . "Contact: {$toFacility->navigatorName} — {$toFacility->navigatorPhone}\n\n"
             . "Please attend as soon as possible.";
 
+        $clientSms =
+            "NCSR: Hello {$client->fullName}, your screening result requires further confirmation. "
+            . "Please visit {$toFacility->facilityName}"
+            . ($toFacility->facilityAddress ? ", {$toFacility->facilityAddress}" : "")
+            . ($clinicHours ? ". Hours: {$clinicHours}" : "")
+            . ". Contact: {$toFacility->navigatorName} {$toFacility->navigatorPhone}.";
+
         if ($client->email) {
             $this->brevo->sendTransactional(
                 to: $client->email,
@@ -42,7 +65,11 @@ class SendMainHubReferralNotifications
         }
 
         if ($client->phoneNumber) {
-            $this->whatsapp->send($client->phoneNumber, $clientMessage);
+            $sent = $this->whatsapp->send($client->phoneNumber, $clientMessage);
+            Log::info('Client WhatsApp send result (main hub referral)', ['to' => $client->phoneNumber, 'result' => $sent]);
+
+            $smsSent = $this->sendSms($client->phoneNumber, $clientSms);
+            Log::info('Client SMS send result (main hub referral)', ['to' => $client->phoneNumber, 'result' => $smsSent]);
         }
 
         // --- Notify main hub navigator ---
