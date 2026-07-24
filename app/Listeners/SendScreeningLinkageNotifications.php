@@ -26,35 +26,14 @@ class SendScreeningLinkageNotifications
             'whatsapp_no' => $facility->whatsappNumber ?? 'MISSING',
         ]);
 
-        // ── Client WhatsApp message ───────────────────────────────────────
-        $clientWhatsApp =
-            "Hello {$client->fullName},\n\n"
-            . "✅ *Your cancer screening registration is confirmed!*\n\n"
-            . "You have been linked to a screening centre near you. "
-            . "Please visit them as soon as possible — early detection saves lives.\n\n"
-            . "🏥 *Your Screening Centre*\n"
-            . "*{$facility->facilityName}*\n"
-            . ($facility->facilityAddress
-                ? "📍 {$facility->facilityAddress}\n"
-                : "")
-            . ($facility->facilityState
-                ? "🗺️ {$facility->facilityLga}, {$facility->facilityState}\n"
-                : "")
-            . "\n"
-            . "👤 *Your Contact Person (Navigator)*\n"
-            . ($facility->navigatorName
-                ? "*{$facility->navigatorName}*\n"
-                : "")
-            . ($facility->navigatorPhone
-                ? "📞 {$facility->navigatorPhone}\n"
-                : "")
-            . ($facility->navigatorEmail
-                ? "✉️ {$facility->navigatorEmail}\n"
-                : "")
-            . "\n"
-            . "Please mention this message when you arrive. "
-            . "If you need to reschedule or have questions, contact your navigator directly.\n\n"
-            . "_This message was sent by the National Cancer Screening Registry (NCSR) — NICRAT_";
+    $clinicHours = $facility->formatClinicHours();
+
+    $clientMessage =
+        "Hello {$client->fullName}, you have been linked to "
+        . "{$facility->facilityName} for your cancer screening. "
+        . "Address: {$facility->facilityAddress}."
+        . ($clinicHours ? " Clinic hours: {$clinicHours}." : "")
+        . " Contact: {$facility->navigatorName} — {$facility->navigatorPhone}.";
 
         // ── Client email message ──────────────────────────────────────────
         $clientEmail =
