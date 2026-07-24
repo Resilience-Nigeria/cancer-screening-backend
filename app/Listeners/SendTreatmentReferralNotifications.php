@@ -20,12 +20,15 @@ class SendTreatmentReferralNotifications
         $client     = $event->client;
         $toFacility = $event->toFacility;
 
+        $clinicHours = $toFacility->formatClinicHours();
+
         // --- Notify client ---
         $clientMessage =
             "Hello {$client->fullName}, your screening has been confirmed and "
             . "you have been referred for treatment.\n\n"
             . "Treatment Centre: {$toFacility->facilityName}\n"
             . "Address: {$toFacility->facilityAddress}\n"
+            . ($clinicHours ? "Clinic hours: {$clinicHours}\n" : "")
             . "Contact: {$toFacility->navigatorName} — {$toFacility->navigatorPhone}\n\n"
             . "Please attend as soon as possible. Early treatment saves lives.";
 

@@ -20,12 +20,15 @@ class SendMainHubReferralNotifications
         $client     = $event->client;
         $toFacility = $event->toFacility;
 
+        $clinicHours = $toFacility->formatClinicHours();
+
         // --- Notify client ---
         $clientMessage =
             "Hello {$client->fullName}, your screening result requires further "
             . "confirmation at a specialist centre.\n\n"
             . "Please visit: {$toFacility->facilityName}\n"
             . "Address: {$toFacility->facilityAddress}\n"
+            . ($clinicHours ? "Clinic hours: {$clinicHours}\n" : "")
             . "Contact: {$toFacility->navigatorName} — {$toFacility->navigatorPhone}\n\n"
             . "Please attend as soon as possible.";
 
