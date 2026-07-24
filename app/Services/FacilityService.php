@@ -51,44 +51,16 @@ class FacilityService
                 'lat'  => $coords->latitude,
                 'lng'  => $coords->longitude,
             ]);
-            return $exact;
         }
+    }
 
-        // ── Get coordinates — area first, then LGA center ─────────────
-        $coords = null;
+    // Fall back to LGA center coordinates
+    if (!$coords) {
+        $coords = DB::table('lgaCoordinates')
+            ->whereRaw('LOWER(state) = ?', [strtolower($state)])
+            ->whereRaw('LOWER(lga) = ?',   [strtolower($lga)])
+            ->first();
 
-        if ($area) {
-            $coords = DB::table('areaCoordinates')
-                ->whereRaw('LOWER(state) = ?', [strtolower($state)])
-                ->whereRaw('LOWER(lga) = ?',   [strtolower($lga)])
-                ->whereRaw('LOWER(area) = ?',  [strtolower($area)])
-                ->first();
-
-            if ($coords) {
-                Log::info('Coordinates: matched by area', [
-                    'area' => $area,
-                    'lat'  => $coords->latitude,
-                    'lng'  => $coords->longitude,
-                ]);
-            }
-        }
-
-        if (!$coords) {
-            $coords = DB::table('lgaCoordinates')
-                ->whereRaw('LOWER(state) = ?', [strtolower($state)])
-                ->whereRaw('LOWER(lga) = ?',   [strtolower($lga)])
-                ->first();
-
-            if ($coords) {
-                Log::info('Coordinates: matched by LGA center', [
-                    'lga' => $lga,
-                    'lat' => $coords->latitude,
-                    'lng' => $coords->longitude,
-                ]);
-            }
-        }
-
-        // ── Step 2: Distance-based search across all active facilities ─
         if ($coords) {
             Log::info('Coordinates: matched by LGA center', [
                 'lga' => $lga,
@@ -109,31 +81,30 @@ class FacilityService
             ->whereNotNull('longitude')
             ->get();
 
-            if ($allFacilities->isNotEmpty()) {
-                $nearest = $allFacilities
-                    ->map(function ($f) use ($clientLat, $clientLng) {
-                        $f->distanceKm = $this->haversineDistance(
-                            $clientLat,
-                            $clientLng,
-                            (float) $f->latitude,
-                            (float) $f->longitude,
-                        );
-                        return $f;
-                    })
-                    ->sortBy('distanceKm')
-                    ->first();
+        if ($allFacilities->isNotEmpty()) {
+            $nearest = $allFacilities
+                ->map(function ($f) use ($clientLat, $clientLng) {
+                    $f->distanceKm = $this->haversineDistance(
+                        $clientLat, $clientLng,
+                        (float) $f->latitude,
+                        (float) $f->longitude,
+                    );
+                    return $f;
+                })
+                ->sortBy('distanceKm')
+                ->first();
 
-                Log::info('Facility: nearest by distance', [
-                    'facility'    => $nearest->facilityName,
-                    'state'       => $nearest->facilityState,
-                    'lga'         => $nearest->facilityLga,
-                    'distance_km' => round($nearest->distanceKm, 2),
-                    'cross_state' => $nearest->facilityState !== $state,
-                ]);
+            Log::info('Facility: nearest by distance', [
+                'facility'    => $nearest->facilityName,
+                'state'       => $nearest->facilityState,
+                'lga'         => $nearest->facilityLga,
+                'distance_km' => round($nearest->distanceKm, 2),
+                'cross_state' => $nearest->facilityState !== $state,
+            ]);
 
-                return $nearest;
-            }
+            return $nearest;
         }
+    }
 
     // ── Step 2: Exact LGA + state match (no coordinates available) ────
     // Only reached when neither area nor LGA coordinates were found -
@@ -158,19 +129,18 @@ class FacilityService
         ->where('facilityState', $state)
         ->first();
 
-        if ($fallback) {
-            Log::info('Facility: state-level fallback', [
-                'state'    => $state,
-                'facility' => $fallback->facilityName,
-            ]);
-            return $fallback;
-        }
-
-        Log::warning('Facility: no active match found', [
-            'state' => $state,
-            'lga'   => $lga,
-            'area'  => $area,
+    if ($fallback) {
+        Log::info('Facility: state-level fallback', [
+            'facility' => $fallback->facilityName,
         ]);
+        return $fallback;
+    }
+
+    Log::warning('Facility: no active match found', [
+        'state' => $state,
+        'lga'   => $lga,
+        'area'  => $area,
+    ]);
 
     return null;
 }
