@@ -26,47 +26,35 @@ class SendScreeningLinkageNotifications
             'whatsapp_no' => $facility->whatsappNumber ?? 'MISSING',
         ]);
 
-        $clinicHours = $facility->formatClinicHours();
-
-        // ── Client email message ──────────────────────────────────────────
-        $clientEmail =
-            "Dear {$client->fullName},\n\n"
-            . "Congratulations! Your cancer screening registration has been confirmed "
-            . "and you have been linked to a screening centre near you.\n\n"
-            . "SCREENING CENTRE DETAILS\n"
-            . "------------------------\n"
-            . "Centre: {$facility->facilityName}\n"
+        // ── Client WhatsApp message ───────────────────────────────────────
+        $clientWhatsApp =
+            "Hello {$client->fullName},\n\n"
+            . "✅ *Your cancer screening registration is confirmed!*\n\n"
+            . "You have been linked to a screening centre near you. "
+            . "Please visit them as soon as possible — early detection saves lives.\n\n"
+            . "🏥 *Your Screening Centre*\n"
+            . "*{$facility->facilityName}*\n"
             . ($facility->facilityAddress
-                ? "Address: {$facility->facilityAddress}\n"
+                ? "📍 {$facility->facilityAddress}\n"
                 : "")
-            . ($facility->facilityLga && $facility->facilityState
-                ? "Location: {$facility->facilityLga}, {$facility->facilityState}\n"
-                : "")
-            . ($clinicHours
-                ? "Clinic Hours: {$clinicHours}\n"
+            . ($facility->facilityState
+                ? "🗺️ {$facility->facilityLga}, {$facility->facilityState}\n"
                 : "")
             . "\n"
-            . "YOUR NAVIGATOR (CONTACT PERSON)\n"
-            . "--------------------------------\n"
+            . "👤 *Your Contact Person (Navigator)*\n"
             . ($facility->navigatorName
-                ? "Name: {$facility->navigatorName}\n"
+                ? "*{$facility->navigatorName}*\n"
                 : "")
             . ($facility->navigatorPhone
-                ? "Phone: {$facility->navigatorPhone}\n"
+                ? "📞 {$facility->navigatorPhone}\n"
                 : "")
             . ($facility->navigatorEmail
-                ? "Email: {$facility->navigatorEmail}\n"
+                ? "✉️ {$facility->navigatorEmail}\n"
                 : "")
             . "\n"
-            . "WHAT TO DO NEXT\n"
-            . "---------------\n"
-            . "1. Visit the screening centre as soon as possible.\n"
-            . "2. Mention your name and that you registered through the NCSR.\n"
-            . "3. Bring a valid ID if available.\n"
-            . "4. Contact your navigator if you need directions or have questions.\n\n"
-            . "Remember: Early detection saves lives. Please do not delay your screening.\n\n"
-            . "This message was sent by the National Cancer Screening Registry (NCSR), "
-            . "National Institute for Cancer Research and Treatment (NICRAT).";
+            . "Please mention this message when you arrive. "
+            . "If you need to reschedule or have questions, contact your navigator directly.\n\n"
+            . "_This message was sent by the National Cancer Screening Registry (NCSR) — NICRAT_";
 
         // ── Client email message ──────────────────────────────────────────
         $clientEmail =
