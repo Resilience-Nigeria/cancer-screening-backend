@@ -35,12 +35,37 @@ Route::prefix('auth')->group(function () {
 // routes/api.php
 Route::get('/areas', function (\Illuminate\Http\Request $request) {
     $areas = DB::table('areaCoordinates')
-        ->whereRaw('LOWER(state) = ?', [strtolower($request->state ?? '')])
-        ->whereRaw('LOWER(lga) = ?',   [strtolower($request->lga   ?? '')])
+        ->whereRaw('LOWER(TRIM(state)) = ?', [strtolower(trim($request->state ?? ''))])
+        ->whereRaw('LOWER(TRIM(lga)) = ?',   [strtolower(trim($request->lga   ?? ''))])
         ->orderBy('area')
         ->pluck('area');
 
     return response()->json(['areas' => $areas]);
+});
+
+/**
+ * Debug helper — shows exactly what the seeded state/lga values look
+ * like for a given state, so mismatches against the frontend's
+ * hardcoded state/LGA list (extra spaces, different spelling, etc.)
+ * are visible directly instead of guessing.
+ */
+Route::get('/areas/debug', function (\Illuminate\Http\Request $request) {
+    $query = DB::table('areaCoordinates');
+
+    if ($request->state) {
+        $query->whereRaw('LOWER(TRIM(state)) = ?', [strtolower(trim($request->state))]);
+    }
+
+    $distinctLgas = (clone $query)
+        ->select('lga', DB::raw('count(*) as area_count'))
+        ->groupBy('lga')
+        ->orderBy('lga')
+        ->get();
+
+    return response()->json([
+        'distinctStatesSeeded' => DB::table('areaCoordinates')->distinct()->pluck('state'),
+        'lgasForThisState' => $distinctLgas,
+    ]);
 });
 
 Route::post('/awareness/register', [AwarenessRegistrationController::class, 'store']);
