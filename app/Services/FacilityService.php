@@ -26,18 +26,30 @@ class FacilityService
     string $lga,
     ?string $area = null,   // 👈 new optional parameter
 ): ?Facility {
-    // ── Step 1: Exact LGA + state match ──────────────────────────────
-    $exact = Facility::where('isScreeningCenter', true)
-        ->where('isActive', true)
-        ->where('facilityState', $state)
-        ->where('facilityLga', $lga)
-        ->first();
+    // ── Get coordinates — area first, then LGA center ─────────────────
+    // This now runs BEFORE the same-LGA shortcut below. Previously, any
+    // facility sharing the same state+LGA was returned immediately,
+    // regardless of which specific area was selected — so if two
+    // screening centers existed in the same LGA (e.g. FMC Jabi and PHC
+    // Gwagwa both in Abuja Municipal), the client was always routed to
+    // whichever one happened to come first in the database, even when
+    // area-level coordinates existed that would clearly point to the
+    // other, closer facility.
+    $coords = null;
 
-        if ($exact) {
-            Log::info('Facility: exact LGA match', [
-                'facility' => $exact->facilityName,
-                'lga'      => $lga,
-                'state'    => $state,
+    // Try area/district level first (more precise)
+    if ($area) {
+        $coords = DB::table('areaCoordinates')
+            ->whereRaw('LOWER(state) = ?', [strtolower($state)])
+            ->whereRaw('LOWER(lga) = ?',   [strtolower($lga)])
+            ->whereRaw('LOWER(area) = ?',  [strtolower($area)])
+            ->first();
+
+        if ($coords) {
+            Log::info('Coordinates: matched by area', [
+                'area' => $area,
+                'lat'  => $coords->latitude,
+                'lng'  => $coords->longitude,
             ]);
             return $exact;
         }
@@ -78,8 +90,18 @@ class FacilityService
 
         // ── Step 2: Distance-based search across all active facilities ─
         if ($coords) {
-            $clientLat = (float) $coords->latitude;
-            $clientLng = (float) $coords->longitude;
+            Log::info('Coordinates: matched by LGA center', [
+                'lga' => $lga,
+                'lat' => $coords->latitude,
+                'lng' => $coords->longitude,
+            ]);
+        }
+    }
+
+    // ── Step 1: Distance-based search across all active facilities ────
+    if ($coords) {
+        $clientLat = (float) $coords->latitude;
+        $clientLng = (float) $coords->longitude;
 
         $allFacilities = Facility::where('isScreeningCenter', true)
             ->where('isActive', true)
@@ -112,6 +134,23 @@ class FacilityService
                 return $nearest;
             }
         }
+
+    // ── Step 2: Exact LGA + state match (no coordinates available) ────
+    // Only reached when neither area nor LGA coordinates were found -
+    // picking any facility in the same LGA is still better than nothing,
+    // but it's no longer allowed to short-circuit a real distance match.
+    $exact = Facility::where('isScreeningCenter', true)
+        ->where('isActive', true)
+        ->where('facilityState', $state)
+        ->where('facilityLga', $lga)
+        ->first();
+
+    if ($exact) {
+        Log::info('Facility: exact LGA match (no coordinates available)', [
+            'facility' => $exact->facilityName,
+        ]);
+        return $exact;
+    }
 
     // ── Step 3: No coordinates — same state fallback ──────────────────
     $fallback = Facility::where('isScreeningCenter', true)
@@ -156,20 +195,11 @@ class FacilityService
     ): ?Facility {
         $levelFilter = fn ($q) => $q->whereIn('facilityLevel', ['subhub', 'hub']);
 
-        // ── Step 1: Exact LGA + state match ──────────────────────────
-        $exact = Facility::where($levelFilter)
-            ->where('isActive', true)
-            ->where('facilityState', $state)
-            ->where('facilityLga', $lga)
-            ->orderByRaw("FIELD(facilityLevel, 'hub', 'subhub')")
-            ->first();
-
-        if ($exact) {
-            Log::info('Referral facility: exact LGA match', ['facility' => $exact->facilityName]);
-            return $exact;
-        }
-
         // ── Get coordinates — area first, then LGA center ─────────────
+        // Runs before the same-LGA shortcut below, for the same reason
+        // as findNearestScreeningFacility above: a same-LGA match must
+        // not short-circuit a real distance calculation when precise
+        // coordinates are available.
         $coords = null;
 
         if ($area) {
@@ -187,7 +217,7 @@ class FacilityService
                 ->first();
         }
 
-        // ── Step 2: Distance-based search across all active facilities ──
+        // ── Step 1: Distance-based search across all active facilities ──
         if ($coords) {
             $clientLat = (float) $coords->latitude;
             $clientLng = (float) $coords->longitude;
@@ -219,6 +249,19 @@ class FacilityService
 
                 return $nearest;
             }
+        }
+
+        // ── Step 2: Exact LGA + state match (no coordinates available) ──
+        $exact = Facility::where($levelFilter)
+            ->where('isActive', true)
+            ->where('facilityState', $state)
+            ->where('facilityLga', $lga)
+            ->orderByRaw("FIELD(facilityLevel, 'hub', 'subhub')")
+            ->first();
+
+        if ($exact) {
+            Log::info('Referral facility: exact LGA match (no coordinates available)', ['facility' => $exact->facilityName]);
+            return $exact;
         }
 
         // ── Step 3: No coordinates — same state fallback ────────────────
