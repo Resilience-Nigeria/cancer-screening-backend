@@ -4,15 +4,36 @@ namespace App\Listeners;
 
 use Illuminate\Support\Facades\Log;
 use App\Events\ClientLinkedToScreeningCenter;
+use App\Models\NotificationProvider;
 use App\Services\BrevoService;
 use App\Services\WhatsAppService;
+use App\Services\BulkSmsService;
+use App\Services\TwilioSmsService;
 
 class SendScreeningLinkageNotifications
 {
     public function __construct(
         protected BrevoService $brevo,
         protected WhatsAppService $whatsapp,
+        protected BulkSmsService $bulkSms,
+        protected TwilioSmsService $twilioSms,
     ) {}
+
+    /**
+     * Resolves the configured default SMS provider - adding a new
+     * provider later is a case here, not a rewire of every caller.
+     * Same pattern used by OtpService and SendFollowUpReminders.
+     */
+    protected function sendSms(string $to, string $message): bool
+    {
+        $provider = NotificationProvider::getDefault('sms');
+
+        return match ($provider?->providerKey ?? 'bulksms') {
+            'twilio' => $this->twilioSms->send($to, $message),
+            'bulksms' => $this->bulkSms->send($to, $message),
+            default => $this->bulkSms->send($to, $message),
+        };
+    }
 
     public function handle(ClientLinkedToScreeningCenter $event): void
     {
@@ -60,6 +81,17 @@ class SendScreeningLinkageNotifications
             . "Please mention this message when you arrive. "
             . "If you need to reschedule or have questions, contact your navigator directly.\n\n"
             . "_This message was sent by the National Cancer Screening Registry (NCSR) — NICRAT_";
+
+        // ── Client SMS message ─────────────────────────────────────────────
+        // Plain text, no markdown - SMS doesn't render *bold*/emoji-heavy
+        // formatting the way WhatsApp does, and has a length budget.
+        $clientSms =
+            "NCSR: Hello {$client->fullName}, your cancer screening registration is confirmed. "
+            . "Centre: {$facility->facilityName}"
+            . ($facility->facilityAddress ? ", {$facility->facilityAddress}" : "")
+            . ($clinicHours ? ". Hours: {$clinicHours}" : "")
+            . ". Contact: {$facility->navigatorName} {$facility->navigatorPhone}. "
+            . "Please visit as soon as possible.";
 
         // ── Client email message ──────────────────────────────────────────
         $clientEmail =
@@ -120,6 +152,16 @@ class SendScreeningLinkageNotifications
             Log::info('Client WhatsApp send result', [
                 'to'     => $client->phoneNumber,
                 'result' => $sent,
+            ]);
+
+            // SMS is sent in addition to WhatsApp, not as a fallback -
+            // WhatsApp delivery isn't guaranteed (no account, not
+            // installed, number not registered), so SMS is the more
+            // reliable channel for something this important.
+            $smsSent = $this->sendSms($client->phoneNumber, $clientSms);
+            Log::info('Client SMS send result', [
+                'to'     => $client->phoneNumber,
+                'result' => $smsSent,
             ]);
         }
 
