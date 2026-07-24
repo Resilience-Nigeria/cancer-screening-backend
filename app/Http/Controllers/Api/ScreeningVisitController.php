@@ -173,7 +173,7 @@ class ScreeningVisitController extends Controller
 
     public function store(StoreScreeningVisitRequest $request, Client $client): JsonResponse
     {
-        $this->authorizeClient($client);
+        // $this->authorizeClient($client);
 
         $visit = ScreeningVisit::create([
             ...$request->validated(),

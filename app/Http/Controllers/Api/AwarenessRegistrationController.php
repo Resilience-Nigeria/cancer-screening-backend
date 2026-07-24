@@ -75,11 +75,21 @@ public function store(StoreAwarenessRegistrationRequest $request): JsonResponse
     area:  $request->areaOfResidence,  // 👈 new
 );
 
+    // Persist the resolved coordinates on the registration itself —
+    // area-level match first (most precise), falling back to the LGA's
+    // center — so the client's approximate location is actually usable
+    // later (mapping, distance reporting), not just used transiently
+    // for facility matching above and then discarded.
+    $coordinates = $this->resolveCoordinates(
+        $request->stateOfResidence,
+        $request->lgaOfResidence,
+        $request->areaOfResidence,
+    );
+
     $registration->update([
         'status'             => $facility ? 'linked' : 'pending',
         'linkedFacilityId'   => $facility?->facilityId,
-        'linkedFacilityId' => $facility?->facilityId,  // 👈 save it
-
+        ...$coordinates,
     ]);
 
     // Send OTP — full notifications fire after verification
@@ -109,6 +119,48 @@ private function maskPhone(string $phone): string
 {
     $clean = preg_replace('/\D/', '', $phone);
     return substr($clean, 0, 3) . '****' . substr($clean, -4);
+}
+
+/**
+ * Resolves the best-available coordinates for a registration: an exact
+ * area/district match first (most precise), falling back to the LGA's
+ * average/center coordinates if no area-level match exists. Returns an
+ * empty array (no keys) if neither is found, so it merges harmlessly
+ * into the update() call above.
+ */
+private function resolveCoordinates(string $state, string $lga, ?string $area): array
+{
+    if ($area) {
+        $match = \Illuminate\Support\Facades\DB::table('areaCoordinates')
+            ->whereRaw('LOWER(state) = ?', [strtolower($state)])
+            ->whereRaw('LOWER(lga) = ?', [strtolower($lga)])
+            ->whereRaw('LOWER(area) = ?', [strtolower($area)])
+            ->first();
+
+        if ($match) {
+            return [
+                'latitude' => $match->latitude,
+                'longitude' => $match->longitude,
+                'coordinateSource' => 'area',
+            ];
+        }
+    }
+
+    $lgaCenter = \Illuminate\Support\Facades\DB::table('areaCoordinates')
+        ->whereRaw('LOWER(state) = ?', [strtolower($state)])
+        ->whereRaw('LOWER(lga) = ?', [strtolower($lga)])
+        ->selectRaw('AVG(latitude) as latitude, AVG(longitude) as longitude')
+        ->first();
+
+    if ($lgaCenter && $lgaCenter->latitude !== null) {
+        return [
+            'latitude' => $lgaCenter->latitude,
+            'longitude' => $lgaCenter->longitude,
+            'coordinateSource' => 'lga',
+        ];
+    }
+
+    return [];
 }
 
 /**
