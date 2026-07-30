@@ -45,6 +45,10 @@ class ClientRiskProfile extends Model
         'hypertension',
         'previousScreening',
         'previousScreeningDetails',
+        'temperatureCelsius',
+        'bloodPressureSystolic',
+        'bloodPressureDiastolic',
+        'pulse',
     ];
 
     protected $casts = [

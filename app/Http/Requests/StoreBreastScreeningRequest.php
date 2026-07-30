@@ -61,7 +61,7 @@ class StoreBreastScreeningRequest extends FormRequest
             'skinChanges' => ['nullable', 'in:yes,no'],
             'breastPain' => ['nullable', 'in:yes,no'],
             'previousBreastSurgery' => ['nullable', 'in:yes,no'],
-            'previousBiopsy' => ['nullable', 'in:yes,no'],
+            'previousBiopsy' => ['nullable', 'in:yes,no,unknown'],
             'ageAtFirstMenstruation' => ['nullable', 'integer', 'min:0', 'max:30'],
             'ageAtMenopause' => ['nullable', 'integer', 'min:0', 'max:100'],
 

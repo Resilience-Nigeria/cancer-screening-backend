@@ -253,11 +253,21 @@ class ScreeningVisitController extends Controller
     ): JsonResponse {
         $this->authorizeVisit($visit);
 
-        $visit->update([
-            ...$request->validated(),
-            'outcomeClassifiedBy' => auth('api')->id(),
-            'outcomeClassifiedAt' => now(),
-        ]);
+        // $visit->update([
+        //     ...$request->validated(),
+        //     'outcomeClassifiedBy' => auth('api')->id(),
+        //     'outcomeClassifiedAt' => now(),
+        // ]);
+
+        $data = $request->validated();
+
+    $visit->update([
+        ...$data,
+        'outcomeClassifiedBy' => auth('api')->id(),
+        'outcomeClassifiedAt' => now(),
+    ]);
+
+        $followUp = $this->storeStage2FollowUp($visit, $data);
 
         $referral = null;
         $isSelfReferral = false;
@@ -300,10 +310,62 @@ class ScreeningVisitController extends Controller
         return response()->json([
             'message' => 'Screening outcome recorded successfully',
             'visit' => $visit,
+            'followUpSchedule' => $followUp,
             'isSelfReferral' => $isSelfReferral,
             'referral' => $referral,
         ]);
     }
+
+
+
+    protected function storeStage2FollowUp(ScreeningVisit $visit, array $data): ?\App\Models\FollowUpSchedule
+{
+    $outcome = $data['overallOutcome'] ?? $visit->overallOutcome;
+
+    // Referral pathways — no routine follow-up schedule
+    if (in_array($outcome, ['suspicious', 'urgent_referral'], true)) {
+        return null;
+    }
+
+    $dueDate = null;
+    $reason = null;
+    $activities = null;
+
+    if ($outcome === 'low_suspicion') {
+        // Required on the frontend; fall back if missing
+        $dueDate = $data['repeatScreeningDate'] ?? $visit->repeatScreeningDate;
+        $reason = 'low_suspicion';
+        $activities = 'Repeat Stage 2 screening (low suspicion). Review prior findings and reassess.';
+    } elseif ($outcome === 'normal') {
+        // Optional: routine interval — adjust to your protocol (e.g. 12 months)
+        $dueDate = $data['repeatScreeningDate']
+            ?? now()->addYear()->toDateString();
+        $reason = 'routine';
+        $activities = 'Routine Stage 2 re-screening per protocol.';
+    }
+
+    if (!$dueDate) {
+        return null;
+    }
+
+    // One open Stage-2 schedule per visit (idempotent on resubmit)
+    return \App\Models\FollowUpSchedule::updateOrCreate(
+        [
+            'visitId' => $visit->visitId,
+            'source' => 'stage2_outcome',
+            'status' => 'pending',
+        ],
+        [
+            'clientId' => $visit->clientId,
+            'treatmentPlanId' => null,
+            'dueDate' => $dueDate,
+            'reason' => $reason,
+            'activities' => $activities,
+            'status' => 'pending',
+        ]
+    );
+}
+
 
     protected function authorizeClient(Client $client): void
     {
