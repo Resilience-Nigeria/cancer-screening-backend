@@ -25,6 +25,7 @@ class AwarenessRegistration extends Model
         'status',
         'clientId',
         'linkedFacilityId',
+        'navigatorId',
     ];
 
     public function client()
@@ -41,4 +42,10 @@ class AwarenessRegistration extends Model
     {
         return $this->hasMany(SelfAssessment::class, 'registrationId', 'registrationId');
     }
+
+    public function navigator()
+    {
+        return $this->belongsTo(Navigator::class, 'navigatorId', 'id');
+    }
+
 }

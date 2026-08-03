@@ -19,6 +19,13 @@ class StoreAwarenessRegistrationRequest extends FormRequest
             'lgaOfResidence'   => ['required', 'string', 'max:100'],
             'campaignSource'   => ['nullable', 'string', 'max:100'],
             'areaOfResidence' => ['nullable', 'string', 'max:100'],
+            'latitude' => ['nullable', 'numeric'],
+            'longitude' => ['nullable', 'numeric'],
+            'coordinateSource' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'in:pending,completed,cancelled'],
+            'clientId' => ['nullable', 'string'],
+            'linkedFacilityId' => ['nullable', 'string'],
+            'navigatorId' => ['nullable', 'integer', 'exists:navigators,id'],
         ];
     }
 }

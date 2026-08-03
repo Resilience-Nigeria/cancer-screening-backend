@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\FacilityController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AwarenessRegistrationController;
 use App\Http\Controllers\Api\SelfAssessmentController;
+use App\Http\Controllers\Api\ClientReferralController;
 
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Http\Controllers\Api\OtpController;
@@ -69,7 +70,7 @@ Route::get('/areas/debug', function (\Illuminate\Http\Request $request) {
 });
 
 Route::post('/awareness/register', [AwarenessRegistrationController::class, 'store']);
-
+Route::post('/awareness/{registrationId}/self-assessment', [SelfAssessmentController::class, 'store']);
 // ── Client Portal ────────────────────────────────────────────────────
 // Public: phone + OTP login (clients never set a password).
 Route::post('/client-portal/send-otp', [App\Http\Controllers\Api\ClientAuthController::class, 'sendOtp']);
@@ -88,7 +89,7 @@ Route::post('/otp/send',   [OtpController::class, 'send']);
 Route::post('/otp/verify', [OtpController::class, 'verify']);
 Route::post('/otp/resend', [OtpController::class, 'resend']);
 
-Route::post('/self-assessment', [SelfAssessmentController::class, 'store']);
+// Route::post('/self-assessment', [SelfAssessmentController::class, 'store']);
 
 Route::match(['GET', 'POST'], '/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle']);
 

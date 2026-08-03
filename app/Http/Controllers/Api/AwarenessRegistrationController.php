@@ -11,6 +11,7 @@ use App\Services\OtpService;
 use App\Services\BrevoService;
 use App\Services\WhatsAppService;
 use App\Services\SmsService;
+use App\Services\NavigatorService;
 
 use Illuminate\Http\JsonResponse;
 
@@ -22,6 +23,7 @@ class AwarenessRegistrationController extends Controller
     protected BrevoService $brevo,
     protected WhatsAppService $whatsapp,
     protected SmsService      $sms,       // 👈 add
+    protected NavigatorService $navigatorService, 
 
 ) {}
     // public function __construct(protected FacilityService $facilityService) {}
@@ -75,6 +77,8 @@ public function store(StoreAwarenessRegistrationRequest $request): JsonResponse
     area:  $request->areaOfResidence,  // 👈 new
 );
 
+$navigator = $facility ? $this->navigatorService->assignNavigator($facility) : null;
+
     // Persist the resolved coordinates on the registration itself —
     // area-level match first (most precise), falling back to the LGA's
     // center — so the client's approximate location is actually usable
@@ -89,6 +93,7 @@ public function store(StoreAwarenessRegistrationRequest $request): JsonResponse
     $registration->update([
         'status'             => $facility ? 'linked' : 'pending',
         'linkedFacilityId'   => $facility?->facilityId,
+        'navigatorId'        => $navigator?->id,
         ...$coordinates,
     ]);
 
@@ -109,7 +114,12 @@ public function store(StoreAwarenessRegistrationRequest $request): JsonResponse
         'facility'       => $facility ? [
             'facilityName' => $facility->facilityName,
             'facilityAddress' => $facility->facilityAddress,
-            'navigatorName' => $facility->navigatorName,
+            'navigatorName' => trim(
+            $navigator?->user?->firstName . ' ' .
+            $navigator?->user?->lastName . ' ' .
+            $navigator?->user?->otherNames
+            ),
+
             'navigatorPhone' => $facility->navigatorPhone,
             'clinicHoursDisplay' => $facility->formatClinicHours(),
         ] : null,

@@ -18,11 +18,30 @@ namespace App\Services;
  */
 class RiskClassificationService
 {
+    
+
     protected const URGENT_SYMPTOMS = [
-        'blood_in_stool', 'blood_in_urine',
-        'vaginal_bleeding_after_menopause', 'bleeding_after_sex',
-        'jaundice', 'persistent_abdominal_pain',
-    ];
+    'blood_in_stool', 'blood_in_urine',
+    'vaginal_bleeding_after_menopause', 'bleeding_after_sex',
+    'jaundice', 'persistent_abdominal_pain',
+    'abdominal_swelling', // persistent bloating/swelling — recognized ovarian-cancer red flag
+    'bowel_habit_change', // recognized colorectal-cancer red flag
+];
+
+// Persistent pelvic pain is a recognized ovarian-cancer red flag on its own,
+// same tier as a lump finding — doesn't need pairing with anything else.
+protected const CONCERNING_SYMPTOMS = [
+    'pelvic_pain',
+];
+
+// Non-specific alone (common benign causes exist for all of these); only
+// escalate when reported alongside another symptom, same logic as the
+// existing general-symptoms handling.
+protected const GENERAL_SYMPTOMS = [
+    'unexplained_weight_loss', 'persistent_fatigue', 'night_sweats', 'persistent_fever',
+    'back_pain', 'breast_pain', 'persistent_diarrhea',
+    'difficulty_urinating', 'frequent_urination', 'abnormal_periods',
+];
 
     // Breast findings apply to everyone — breast cancer is not female-only,
     // even though routine population screening programs target women.
@@ -31,9 +50,7 @@ class RiskClassificationService
         'lump_neck', 'lump_underarm', 'lump_groin', 'lump_elsewhere',
     ];
 
-    protected const GENERAL_SYMPTOMS = [
-        'unexplained_weight_loss', 'persistent_fatigue', 'night_sweats', 'persistent_fever',
-    ];
+    
 
     protected const RELEVANT_MEDICAL_HISTORY = [
         'cervical_dysplasia', 'colon_polyps', 'cancer',
@@ -59,16 +76,15 @@ class RiskClassificationService
 
         // ── Tier 1: Symptomatic / High Risk ─────────────────────────────
         $urgentHit = array_intersect(self::URGENT_SYMPTOMS, $symptoms);
-        $lumpHit = array_intersect(self::LUMP_SYMPTOMS, $symptoms);
-        $generalHit = array_intersect(self::GENERAL_SYMPTOMS, $symptoms);
-        // General symptoms alone are non-specific; only escalate when paired
-        // with something else (another symptom, or a relevant risk factor).
-        $otherSymptomPresent = count($symptoms) > count($generalHit);
+$lumpHit = array_intersect(self::LUMP_SYMPTOMS, $symptoms);
+$concerningHit = array_intersect(self::CONCERNING_SYMPTOMS, $symptoms);
+$generalHit = array_intersect(self::GENERAL_SYMPTOMS, $symptoms);
+$otherSymptomPresent = count($symptoms) > count($generalHit);
 
-        if (!empty($urgentHit) || !empty($lumpHit) || (!empty($generalHit) && $otherSymptomPresent)) {
-            foreach (array_merge($urgentHit, $lumpHit, $otherSymptomPresent ? $generalHit : []) as $s) {
-                $flags[] = 'Reported symptom: ' . $this->humanize($s);
-            }
+if (!empty($urgentHit) || !empty($lumpHit) || !empty($concerningHit) || (!empty($generalHit) && $otherSymptomPresent)) {
+    foreach (array_merge($urgentHit, $lumpHit, $concerningHit, $otherSymptomPresent ? $generalHit : []) as $s) {
+        $flags[] = 'Reported symptom: ' . $this->humanize($s);
+    }
 
             $suggested = $this->suggestedTypesFromSymptoms($symptoms, $sex);
             return [
@@ -167,22 +183,27 @@ class RiskClassificationService
     }
 
     protected function suggestedTypesFromSymptoms(array $symptoms, string $sex): array
-    {
-        $types = [];
-        // Breast cancer is not female-only — these are never gated by sex.
-        if (in_array('lump_breast', $symptoms, true)
-            || in_array('nipple_discharge', $symptoms, true)
-            || in_array('breast_skin_changes', $symptoms, true)) {
-            $types[] = 'breast';
-        }
-        if (in_array('vaginal_bleeding_after_menopause', $symptoms, true)
-            || in_array('bleeding_after_sex', $symptoms, true)) $types[] = 'cervical';
-        if (in_array('blood_in_stool', $symptoms, true)
-            || in_array('persistent_abdominal_pain', $symptoms, true)) $types[] = 'colorectal';
-        if (in_array('blood_in_urine', $symptoms, true) && $sex === 'male') $types[] = 'prostate';
-        if (in_array('jaundice', $symptoms, true)) $types[] = 'liver';
-        return array_values(array_unique($types));
+{
+    $types = [];
+    if (in_array('lump_breast', $symptoms, true)
+        || in_array('nipple_discharge', $symptoms, true)
+        || in_array('breast_skin_changes', $symptoms, true)) {
+        $types[] = 'breast';
     }
+    if (in_array('vaginal_bleeding_after_menopause', $symptoms, true)
+        || in_array('bleeding_after_sex', $symptoms, true)
+        || in_array('pelvic_pain', $symptoms, true)
+        || in_array('abnormal_periods', $symptoms, true)) $types[] = 'cervical';
+    if (in_array('blood_in_stool', $symptoms, true)
+        || in_array('persistent_abdominal_pain', $symptoms, true)
+        || in_array('bowel_habit_change', $symptoms, true)
+        || in_array('persistent_diarrhea', $symptoms, true)) $types[] = 'colorectal';
+    if ((in_array('blood_in_urine', $symptoms, true)
+        || in_array('difficulty_urinating', $symptoms, true)
+        || in_array('frequent_urination', $symptoms, true)) && $sex === 'male') $types[] = 'prostate';
+    if (in_array('jaundice', $symptoms, true)) $types[] = 'liver';
+    return array_values(array_unique($types));
+}
 
     protected function suggestedTypesFromRiskFactors(array $familyHistory, array $medicalHistory, array $infections): array
     {

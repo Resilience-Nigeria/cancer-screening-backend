@@ -267,4 +267,10 @@ class Facility extends Model
         return $query->where('isScreeningCenter', true)
                      ->where('isTreatmentCenter', true);
     }
+
+
+    public function navigators()
+{
+    return $this->hasMany(Navigator::class, 'facilityId', 'facilityId');
+}
 }

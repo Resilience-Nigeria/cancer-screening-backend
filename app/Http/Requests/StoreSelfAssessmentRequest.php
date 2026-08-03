@@ -14,10 +14,10 @@ class StoreSelfAssessmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'registrationId' => ['required', 'integer', 'exists:awareness_registrations,registrationId'],
+            'registrationId' => ['nullable', 'integer', 'exists:awareness_registrations,registrationId'],
 
             'answers' => ['required', 'array'],
-            'answers.age' => ['required', 'integer', 'min:1', 'max:120'],
+            'age' => ['required', 'integer', 'min:1', 'max:120'],
             'answers.heightCm' => ['nullable', 'numeric', 'min:0'],
             'answers.weightKg' => ['nullable', 'numeric', 'min:0'],
 

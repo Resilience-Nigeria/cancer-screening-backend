@@ -40,7 +40,7 @@ class OtpController extends Controller
         return response()->json(['message' => 'OTP sent successfully.']);
     }
 
-    public function verify(Request $request): JsonResponse
+   public function verify(Request $request): JsonResponse
 {
     $data = $request->validate([
         'phoneNumber' => ['required', 'string'],
@@ -68,17 +68,9 @@ class OtpController extends Controller
         );
     }
 
-    // Fire linkage notifications now that phone is verified
-    if ($registration && $facility) {
-        \App\Events\ClientLinkedToScreeningCenter::dispatch(
-            (object) [
-                'fullName'    => $registration->fullName,
-                'email'       => $registration->email,
-                'phoneNumber' => $registration->phoneNumber,
-            ],
-            $facility,
-        );
-    }
+    // Linkage notification now fires after self-assessment completion
+    // (SelfAssessmentController::store), not here — verifying a phone
+    // number isn't the same as being ready for a screening referral.
 
     return response()->json([
         'message'      => 'Phone number verified successfully.',
@@ -91,7 +83,6 @@ class OtpController extends Controller
         ] : null,
     ]);
 }
-
     public function resend(Request $request): JsonResponse
     {
         $data = $request->validate([
