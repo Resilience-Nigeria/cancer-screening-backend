@@ -11,15 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Schema::table('clients', function (Blueprint $table) {
-        // $table->unsignedBigInteger('navigatorId')->nullable();  
-        // $table->foreign('navigatorId')->references('id')->on('navigators')->nullOnDelete();
-        // });
+        Schema::table('clients', function (Blueprint $table) {
+        $table->unsignedBigInteger('navigatorId')->nullable();  
+        $table->foreign('navigatorId')->references('id')->on('navigators')->nullOnDelete();
+        });
    
-        // Schema::table('awareness_registrations', function (Blueprint $table) {
-        // $table->unsignedBigInteger('navigatorId')->nullable();  
-        // $table->foreign('navigatorId')->references('id')->on('navigators')->nullOnDelete();
-        // });
+        Schema::table('awareness_registrations', function (Blueprint $table) {
+        $table->unsignedBigInteger('navigatorId')->nullable();  
+        $table->foreign('navigatorId')->references('id')->on('navigators')->nullOnDelete();
+        });
     }
 
     /**
