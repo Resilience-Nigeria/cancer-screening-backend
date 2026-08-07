@@ -273,4 +273,10 @@ class Facility extends Model
 {
     return $this->hasMany(Navigator::class, 'facilityId', 'facilityId');
 }
+
+public function services(): BelongsToMany
+{
+    return $this->belongsToMany(Service::class, 'facilityServices', 'facilityId', 'serviceId')
+        ->wherePivot('isActive', true);
+}
 }

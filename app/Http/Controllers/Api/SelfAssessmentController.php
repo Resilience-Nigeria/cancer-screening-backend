@@ -6,96 +6,150 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSelfAssessmentRequest;
 use App\Models\AwarenessRegistration;
 use App\Models\SelfAssessment;
+use App\Models\ClientReferral;
 use App\Services\RiskClassificationService;
-use App\Events\ClientLinkedToScreeningCenter;
-
-
-
 use App\Services\SymptomIdMapper;
+use App\Services\FacilityService;
+use App\Services\NavigatorService;
+use App\Services\BloomClientConversionService;
+use App\Events\ClientLinkedToScreeningCenter;
 use Illuminate\Http\JsonResponse;
 
 class SelfAssessmentController extends Controller
 {
-    public function __construct(protected RiskClassificationService $riskService) {}
+    private const ESCALATE_TO_REFERRAL_TIERS = ['symptomatic_high', 'increased'];
 
-   public function store(StoreSelfAssessmentRequest $request, string $registrationId): JsonResponse
-{
-    $registration = AwarenessRegistration::with(['facility', 'navigator.user'])
-        ->findOrFail($registrationId);
+    public function __construct(
+        protected RiskClassificationService $riskService,
+        protected FacilityService $facilityService,
+        protected NavigatorService $navigatorService,
+        protected BloomClientConversionService $clientConversion,
+    ) {}
 
-    $validated = $request->validated();
-    $age = $validated['age'] ?? null;
+ public function store(StoreSelfAssessmentRequest $request, string $registrationId): JsonResponse
+    {
+        $registration = AwarenessRegistration::with(['facility', 'navigator.user'])
+            ->findOrFail($registrationId);
 
-    // validated() can drop 'answers' entirely when nested dot-rules don't
-    // match the submitted keys (see note above) — read raw input as a
-    // fallback so a genuinely-empty answers object doesn't crash here.
-    $rawAnswers = $request->input('answers', []);
+        $validated = $request->validated();
+        $age = $validated['age'] ?? null;
+        $rawAnswers = $request->input('answers', []);
+        $mappedSymptoms = SymptomIdMapper::toBackendIds($rawAnswers['symptoms'] ?? []);
 
-    $mappedSymptoms = SymptomIdMapper::toBackendIds($rawAnswers['symptoms'] ?? []);
+        $classificationInput = array_merge($rawAnswers, [
+            'age' => $age,
+            'symptoms' => $mappedSymptoms,
+        ]);
 
-    // classify() reads age off $answers itself, not as a sibling arg —
-    // merge it in rather than passing separately.
-    $classificationInput = array_merge($rawAnswers, [
-        'age' => $age,
-        'symptoms' => $mappedSymptoms,
-    ]);
+        $result = $this->riskService->classify($classificationInput, $registration->gender);
 
-    $result = $this->riskService->classify($classificationInput, $registration->gender);
+        $originFacility = $registration->facility; // matched at registration
+        $navigator = $registration->navigator;
 
-    $assessment = SelfAssessment::create([
-        'registrationId'           => $registration->registrationId,
-        'answersJson'              => array_merge($rawAnswers, ['age' => $age]),
-        'riskCategory'             => $result['riskCategory'],
-        'recommendation'           => $result['recommendation'],
-        'flaggedReasonsJson'       => $result['flaggedReasons'],
-        'suggestedCancerTypesJson' => $result['suggestedCancerTypes'],
-        'completedAt'              => now(),
-    ]);
+        $linkTarget = $originFacility;
+        $referralFrom = null;
 
-    $facility = $registration->facility;
-    $navigator = $registration->navigator;
-    $navigatorName = $navigator?->user
-        ? trim(implode(' ', array_filter([
-            $navigator->user->firstName,
-            $navigator->user->lastName,
-            $navigator->user->otherNames,
-          ])))
-        : null;
+        // High/increased risk: escalate to nearest Hub/SubHub, skipping Feeders.
+        if (in_array($result['riskCategory'], self::ESCALATE_TO_REFERRAL_TIERS, true)) {
+            $referralFacility = $this->facilityService->findNearestReferralFacility(
+                state: $registration->stateOfResidence,
+                lga:   $registration->lgaOfResidence,
+                area:  $registration->areaOfResidence,
+            );
+
+            if ($referralFacility && $referralFacility->facilityId !== $originFacility?->facilityId) {
+                $linkTarget = $referralFacility;
+                $referralFrom = $originFacility;
+            }
+        }
+
+        // Capture linkage for ANY facility match, regardless of risk tier —
+        // a Client + ClientReferral now get created whenever someone is
+        // matched to a facility, not only on high-risk escalation. This is
+        // purely a tracking change: what the client sees below, and whether
+        // a notification fires, still depends on risk tier exactly as before.
+        if ($linkTarget) {
+            $client = $this->clientConversion->convert($registration, $linkTarget);
+
+            if ($client->linkedFacilityId !== $linkTarget->facilityId) {
+                $client->update(['linkedFacilityId' => $linkTarget->facilityId]);
+            }
+
+            $alreadyReferredHere = ClientReferral::where('clientId', $client->clientId)
+                ->where('toFacilityId', $linkTarget->facilityId)
+                ->exists();
+
+            if (!$alreadyReferredHere) {
+                ClientReferral::create([
+                    'clientId'       => $client->clientId,
+                    'fromFacilityId' => $referralFrom?->facilityId,
+                    'toFacilityId'   => $linkTarget->facilityId,
+                    'referralType'   => 'awareness_to_screening',
+                    'status'         => 'pending',
+                    'referralDate'   => now(),
+                    'notes'          => "Auto-linked from Bloom self-assessment (risk: {$result['riskCategory']})",
+                ]);
+            }
 
 
-// Fire linkage notifications now that the assessment is complete —
-// mirrors the same condition that gates whether facility info is
-// shown to the client in this response.
-if ($result['riskCategory'] !== 'low' && $facility) {
-    ClientLinkedToScreeningCenter::dispatch(
-        (object) [
-            'fullName'    => $registration->fullName,
-            'email'       => $registration->email,
-            'phoneNumber' => $registration->phoneNumber,
-        ],
-        $facility,
-    );
-}
+
+            // Escalation moved the target facility — navigator must follow.
+            if ($referralFrom) {
+                $navigator = $this->navigatorService->assignNavigator($linkTarget);
+                $registration->update(['navigatorId' => $navigator?->id]);
+            }
+        }
+
+        $assessment = SelfAssessment::create([
+            'clientId'                 => $registration->clientId,
+            'registrationId'           => $registration->registrationId,
+            'answersJson'              => array_merge($rawAnswers, ['age' => $age]),
+            'riskCategory'             => $result['riskCategory'],
+            'recommendation'           => $result['recommendation'],
+            'flaggedReasonsJson'       => $result['flaggedReasons'],
+            'suggestedCancerTypesJson' => $result['suggestedCancerTypes'],
+            'completedAt'              => now(),
+        ]);
+
+        // Client-facing display + notification unchanged — still risk-gated.
+        $facility = ($result['riskCategory'] !== 'low') ? $linkTarget : null;
+
+        $navigatorName = $navigator?->user
+            ? trim(implode(' ', array_filter([
+                $navigator->user->firstName,
+                $navigator->user->lastName,
+                $navigator->user->otherNames,
+              ])))
+            : null;
+
+        if ($facility) {
+            ClientLinkedToScreeningCenter::dispatch(
+                (object) [
+                    'fullName'    => $registration->fullName,
+                    'email'       => $registration->email,
+                    'phoneNumber' => $registration->phoneNumber,
+                ],
+                $facility,
+                $navigator,
+            );
+        }
+
+        return response()->json([
+            'assessmentId'   => (string) $assessment->assessmentId,
+            'riskCategory'   => $result['riskCategory'],
+            'recommendation' => $result['recommendation'],
+            'flaggedReasons' => $result['flaggedReasons'],
+            'facility'       => $facility ? [
+                'facilityName'       => $facility->facilityName,
+                'facilityAddress'    => $facility->facilityAddress,
+                'navigatorName'      => $navigatorName ?: $facility->navigatorName,
+                'navigatorPhone'     => $navigator?->user?->phoneNumber ?? $facility->navigatorPhone,
+                'clinicHoursDisplay' => $facility->formatClinicHours(),
+            ] : null,
+        ], 201);
+    }
 
 
-    return response()->json([
-        'assessmentId'   => (string) $assessment->assessmentId,
-        'riskCategory'   => $result['riskCategory'],
-        'recommendation' => $result['recommendation'],
-        'flaggedReasons' => $result['flaggedReasons'],
-        'facility'       => ($result['riskCategory'] !== 'low' && $facility) ? [
-            'facilityName'       => $facility->facilityName,
-            'facilityAddress'    => $facility->facilityAddress,
-            'navigatorName'      => $navigatorName ?: $facility->navigatorName,
-            'navigatorPhone'     => $navigator?->user?->phoneNumber ?? $facility->navigatorPhone,
-            'clinicHoursDisplay' => $facility->formatClinicHours(),
-        ] : null,
-    ], 201);
-}
-    /**
-     * Stage 1 self-assessment records — for internal staff visibility,
-     * not the public submission flow above.
-     */
     public function index(\Illuminate\Http\Request $request): JsonResponse
     {
         $user = $request->user();
@@ -117,4 +171,5 @@ if ($result['riskCategory'] !== 'low' && $facility) {
 
         return response()->json($assessments);
     }
+
 }

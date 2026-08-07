@@ -25,7 +25,7 @@ class StoreScreeningVisitRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'visitDate' => ['required', 'date'],
+            'visitDate' => ['nullable', 'date'],
             'visitType' => ['required', 'in:initial,follow_up'],
             'notes' => ['nullable', 'string'],
             'treatmentReferral' => ['nullable', 'boolean'],

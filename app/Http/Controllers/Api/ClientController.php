@@ -22,16 +22,16 @@ class ClientController extends Controller
         $user = auth('api')->user();
         $search = $request->string('search')->toString();
 
-        $query = Client::with(['facility', 'latestRiskProfile', 'outcome'])
-            ->when($user->visibleFacilityIds() !== null, fn ($q) => $q->whereIn('facilityId', $user->visibleFacilityIds()))
-            ->when($search, function ($q) use ($search) {
-                $q->where(function ($sub) use ($search) {
-                    $sub->where('fullName', 'like', "%{$search}%")
-                        ->orWhere('phoneNumber', 'like', "%{$search}%")
-                        ->orWhere('clientId', 'like', "%{$search}%");
-                });
-            })
-            ->latest();
+        $query = Client::with(['facility', 'latestRiskProfile', 'outcome', 'latestReferral'])
+    ->when($user->visibleFacilityIds() !== null, fn ($q) => $q->whereIn('facilityId', $user->visibleFacilityIds()))
+    ->when($search, function ($q) use ($search) {
+        $q->where(function ($sub) use ($search) {
+            $sub->where('fullName', 'like', "%{$search}%")
+                ->orWhere('phoneNumber', 'like', "%{$search}%")
+                ->orWhere('clientId', 'like', "%{$search}%");
+        });
+    })
+    ->latest();
 
         return response()->json($query->paginate(20));
     }

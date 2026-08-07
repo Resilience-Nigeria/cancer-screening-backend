@@ -130,4 +130,9 @@ protected $keyType = 'string';
     {
         return $this->hasOne(CaseOutcome::class, 'clientId', 'clientId');
     }
+
+    public function latestReferral(): HasOne
+{
+    return $this->hasOne(ClientReferral::class, 'clientId', 'clientId')->latestOfMany('referralId');
+}
 }

@@ -37,8 +37,8 @@ class StoreBreastScreeningRequest extends FormRequest
         return [
             'clientId' => ['nullable', 'string'],
             'method' => ['required', 'in:cbe,mammography,uss'],
-            'screeningDate' => ['required', 'date'],
-            'screeningResult' => ['required', 'in:negative,positive,suspicious,non_suspicious'],
+            'screeningDate' => ['nullable', 'date'],
+            'screeningResult' => ['nullable', 'in:negative,positive,suspicious,non_suspicious'],
 
             // Imaging findings
             'biradsScore' => ['nullable', 'string', 'max:50'],

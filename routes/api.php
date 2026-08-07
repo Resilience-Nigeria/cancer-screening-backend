@@ -17,9 +17,13 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AwarenessRegistrationController;
 use App\Http\Controllers\Api\SelfAssessmentController;
 use App\Http\Controllers\Api\ClientReferralController;
+use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\ClientVisitController;
 
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Http\Controllers\Api\OtpController;
+use App\Http\Controllers\Api\NavigatorClientsController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -107,7 +111,15 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
             'message' => 'User authenticated successfully',
             ]);
         });
-            
+
+        Route::get('/services', [ServiceController::class, 'index']);
+        Route::get('/services/{slug}/facilities', [ServiceController::class, 'facilitiesForService']);
+        Route::post('/clients/{clientId}/bookings', [BookingController::class, 'store']);
+
+        Route::get('/clients/{clientId}/visits/incomplete', [ClientVisitController::class, 'incomplete']);
+
+    Route::get('/navigator/clients', [NavigatorClientsController::class, 'index']);
+
     Route::get('/awareness/registrations', [AwarenessRegistrationController::class, 'index']);
     Route::get('/awareness/lookup', [AwarenessRegistrationController::class, 'lookupByPhone']);
     
