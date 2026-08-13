@@ -41,7 +41,7 @@ class StoreCervicalScreeningRequest extends FormRequest
     {
         return [
             'clientId' => ['nullable', 'string'],
-            'method' => ['required', 'in:via,pap,hpv'],
+            'method' => ['required', 'in:methodVia,methodPap,methodHpv'],
             'screeningDate' => ['nullable', 'date'],
             'screeningResult' => ['nullable', 'in:negative,positive,suspicious,non_suspicious'],
 
