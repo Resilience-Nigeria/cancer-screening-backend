@@ -24,6 +24,31 @@ class CervicalScreening extends Model
         'biopsyResult',
         'treatmentReferral',
 
+        // Ablation eligibility + booking (mirrors breast's biopsyBookNow pattern)
+        'ablationEligibility',
+        'ablationBookNow',
+        'ablationBookingDate',
+        'ablationBookingFacilityId',
+        'ablationBookingNotes',
+
+        // LEEP booking + post-treatment histology
+        'leepBookNow',
+        'leepBookingDate',
+        'leepBookingFacilityId',
+        'leepBookingNotes',
+        'histologyResult',
+
+        // Colposcopy booking (for non-16/18/35/45 high-risk genotypes)
+        'colposcopyBookNow',
+        'colposcopyBookingDate',
+        'colposcopyBookingFacilityId',
+        'colposcopyBookingNotes',
+        'colposcopyResult',
+
+        // Derived outcome
+        'referralPathway',
+        'followUpMonths',
+
         // Cervical-specific risk factors
         'moreThanOnePartner',
         'ageAtFirstIntercourse',
@@ -37,8 +62,15 @@ class CervicalScreening extends Model
         'screeningDate' => 'date',
         'colposcopyDone' => 'boolean',
         'biopsyDone' => 'boolean',
+        'ablationBookNow' => 'boolean',
+        'ablationBookingDate' => 'date',
+        'leepBookNow' => 'boolean',
+        'leepBookingDate' => 'date',
+        'colposcopyBookNow' => 'boolean',
+        'colposcopyBookingDate' => 'date',
         'ageAtFirstIntercourse' => 'integer',
         'numberOfChildbirths' => 'integer',
+        'followUpMonths' => 'integer',
     ];
 
     public function visit(): BelongsTo

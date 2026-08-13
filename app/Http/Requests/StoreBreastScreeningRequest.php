@@ -23,7 +23,7 @@ class StoreBreastScreeningRequest extends FormRequest
             $merge['method'] = 'uss';
         }
 
-        foreach (['biopsyDone', 'referralCompleted', 'ihcRequested'] as $bool) {
+        foreach (['biopsyDone', 'referralCompleted', 'ihcRequested', 'biopsyBookNow'] as $bool) {
             if ($this->has($bool) && is_string($this->input($bool))) {
                 $merge[$bool] = filter_var($this->input($bool), FILTER_VALIDATE_BOOLEAN);
             }
@@ -67,6 +67,7 @@ class StoreBreastScreeningRequest extends FormRequest
 
             // Procedures & follow-up
             'biopsyDone' => ['nullable', 'boolean'],
+            'biopsyBookNow' => ['nullable', 'boolean'],
             'biopsyBookingDate' => ['nullable', 'date'],
             'biopsyBookingFacilityId' => ['nullable', 'integer', 'exists:facilities,facilityId'],
             'biopsyBookingNotes' => ['nullable', 'string'],

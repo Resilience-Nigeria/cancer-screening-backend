@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Services\StoresServiceBookings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBreastScreeningRequest;
 use App\Models\BreastScreening;
@@ -10,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 
 class BreastScreeningController extends Controller
 {
+    use StoresServiceBookings;
+
     public function store(StoreBreastScreeningRequest $request, ScreeningVisit $visit): JsonResponse
     {
         $this->authorizeVisit($visit);
@@ -32,6 +35,21 @@ class BreastScreeningController extends Controller
                 'clientId' => $visit->clientId,
             ]
         );
+
+        // Persist the actual booking — biopsyBookNow/biopsyBookingDate/
+        // biopsyBookingFacilityId/biopsyBookingNotes were previously saved
+        // on the screening row but never turned into a Booking record.
+        if ($data['biopsyBookNow'] ?? false) {
+            $this->storeBooking(
+                $visit->clientId,
+                $visit->visitId,
+                'biopsy',
+                'breast',
+                $data['biopsyBookingDate'] ?? null,
+                $data['biopsyBookingFacilityId'] ?? null,
+                $data['biopsyBookingNotes'] ?? null
+            );
+        }
 
         return response()->json([
             'message' => 'Breast screening saved successfully',
