@@ -84,6 +84,19 @@ class ProstateScreeningController extends Controller
             'nocturia' => $screening->nocturia,
             'incompleteEmptying' => $screening->incompleteEmptying,
             'bloodInUrine' => $screening->bloodInUrine,
+            'inabilityToPassUrine' => $screening->inabilityToPassUrine,
+            'bonePainHipBack' => $screening->bonePainHipBack,
+            'unexplainedWeightLoss' => $screening->unexplainedWeightLoss,
+
+            'screeningPathway' => $screening->screeningPathway,
+
+            'recentDre' => $screening->recentDre,
+            'recentEjaculation' => $screening->recentEjaculation,
+            'recentUrinaryInfection' => $screening->recentUrinaryInfection,
+            'recentVigorousExercise' => $screening->recentVigorousExercise,
+            'psaEligibility' => $screening->psaEligibility,
+            'recallDate' => optional($screening->recallDate)->toDateString(),
+            'recommendedAction' => $screening->recommendedAction,
 
             'biopsyDone' => (bool) $screening->biopsyDone,
             'gleasonScore' => $screening->gleasonScore,

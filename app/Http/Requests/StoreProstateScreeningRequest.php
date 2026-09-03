@@ -35,6 +35,10 @@ class StoreProstateScreeningRequest extends FormRequest
             // Screening details
             'clientId' => ['nullable', 'string'],
             'screeningDate' => ['nullable', 'date'],
+            // "screeningResult" and "treatmentReferral" are auto-derived on the
+            // client from the symptom checklist + PSA/DRE thresholds (National
+            // Prostate Cancer Screening Algorithm) rather than picked manually,
+            // but the values submitted still have to be one of these.
             'screeningResult' => ['nullable', 'in:negative,positive,suspicious,non_suspicious'],
             'psaLevel' => ['nullable', 'numeric', 'min:0', 'max:1000'],
             // Column is enum('positive','negative')
@@ -42,7 +46,8 @@ class StoreProstateScreeningRequest extends FormRequest
             'ipssScore' => ['nullable', 'integer', 'min:0', 'max:35'],
             'treatmentReferral' => ['nullable', 'in:referred,not_referred'],
 
-            // Urinary symptoms (9 symptoms as per frontend)
+            // Urinary / warning symptoms (existing 9 + 3 added per the
+            // screening algorithm's red-flag symptom list).
             'poorUrinaryStream' => ['nullable', 'in:yes,no'],
             'urgeIncontinence' => ['nullable', 'in:yes,no'],
             'delayStartingUrination' => ['nullable', 'in:yes,no'],
@@ -52,6 +57,22 @@ class StoreProstateScreeningRequest extends FormRequest
             'nocturia' => ['nullable', 'in:yes,no'],
             'incompleteEmptying' => ['nullable', 'in:yes,no'],
             'bloodInUrine' => ['nullable', 'in:yes,no'],
+            'inabilityToPassUrine' => ['nullable', 'in:yes,no'],
+            'bonePainHipBack' => ['nullable', 'in:yes,no'],
+            'unexplainedWeightLoss' => ['nullable', 'in:yes,no'],
+
+            // Screening pathway routing (symptomatic vs asymptomatic), stored
+            // for audit purposes alongside the symptom checklist above.
+            'screeningPathway' => ['nullable', 'in:Symptomatic,Asymptomatic'],
+
+            // PSA-deferment conditions and eligibility outcome.
+            'recentDre' => ['nullable', 'in:yes,no'],
+            'recentEjaculation' => ['nullable', 'in:yes,no'],
+            'recentUrinaryInfection' => ['nullable', 'in:yes,no'],
+            'recentVigorousExercise' => ['nullable', 'in:yes,no'],
+            'psaEligibility' => ['nullable', 'in:Eligible,Deferred'],
+            'recallDate' => ['nullable', 'date'],
+            'recommendedAction' => ['nullable', 'string', 'max:1000'],
 
             // Procedures
             'biopsyDone' => ['nullable', 'boolean'],
@@ -90,6 +111,14 @@ class StoreProstateScreeningRequest extends FormRequest
             'nocturia.in' => 'Please select yes or no for nocturia.',
             'incompleteEmptying.in' => 'Please select yes or no for incomplete emptying.',
             'bloodInUrine.in' => 'Please select yes or no for blood in urine.',
+            'inabilityToPassUrine.in' => 'Please select yes or no for inability to pass urine.',
+            'bonePainHipBack.in' => 'Please select yes or no for persistent bone/hip/back pain.',
+            'unexplainedWeightLoss.in' => 'Please select yes or no for unexplained weight loss.',
+
+            'recentDre.in' => 'Please select yes or no for recent DRE / prostate massage.',
+            'recentEjaculation.in' => 'Please select yes or no for recent ejaculation.',
+            'recentUrinaryInfection.in' => 'Please select yes or no for recent urinary infection / catheterisation.',
+            'recentVigorousExercise.in' => 'Please select yes or no for recent vigorous exercise / cycling.',
         ];
     }
 }

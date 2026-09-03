@@ -23,7 +23,8 @@ class ProstateScreening extends Model
         'gleasonScore',
         'treatmentReferral',
 
-        // Urinary symptoms
+        // Urinary / warning symptoms (existing 9 + 3 red-flag symptoms added
+        // per the National Prostate Cancer Screening Algorithm)
         'poorUrinaryStream',
         'urgeIncontinence',
         'delayStartingUrination',
@@ -33,12 +34,29 @@ class ProstateScreening extends Model
         'nocturia',
         'incompleteEmptying',
         'bloodInUrine',
+        'inabilityToPassUrine',
+        'bonePainHipBack',
+        'unexplainedWeightLoss',
+
+        // Screening pathway (symptomatic → clinical/diagnostic referral vs
+        // asymptomatic → continue routine screening)
+        'screeningPathway',
+
+        // PSA-deferment conditions and eligibility outcome
+        'recentDre',
+        'recentEjaculation',
+        'recentUrinaryInfection',
+        'recentVigorousExercise',
+        'psaEligibility',
+        'recallDate',
+        'recommendedAction',
 
         'remarks',
     ];
 
     protected $casts = [
         'screeningDate' => 'date',
+        'recallDate' => 'date',
         'biopsyDone' => 'boolean',
         'ipssScore' => 'integer',
     ];
