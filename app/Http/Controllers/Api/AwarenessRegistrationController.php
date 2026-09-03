@@ -6,6 +6,7 @@ use App\Events\ClientLinkedToScreeningCenter;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAwarenessRegistrationRequest;
 use App\Models\AwarenessRegistration;
+use App\Models\Navigator;
 use App\Services\FacilityService;
 use App\Services\OtpService;
 use App\Services\BrevoService;
@@ -71,13 +72,28 @@ public function store(StoreAwarenessRegistrationRequest $request): JsonResponse
 {
     $registration = AwarenessRegistration::create($request->validated());
 
-    $facility = $this->facilityService->findNearestScreeningFacility(
-    state: $request->stateOfResidence,
-    lga:   $request->lgaOfResidence,
-    area:  $request->areaOfResidence,  // 👈 new
-);
+    // If this registration is being submitted by a logged-in navigator
+    // (e.g. the "new client" step of Stage 2 — Clinical Screening, which
+    // hits this same endpoint), skip location-based matching entirely and
+    // assign the client straight to that navigator and their facility,
+    // regardless of the state/LGA/area they entered. The public,
+    // unauthenticated Bloom self-registration form has no logged-in
+    // navigator, so it keeps the existing nearest-facility-by-location
+    // behaviour unchanged.
+    $loggedInNavigator = $this->resolveLoggedInNavigator();
 
-$navigator = $facility ? $this->navigatorService->assignNavigator($facility) : null;
+    if ($loggedInNavigator) {
+        $facility  = $loggedInNavigator->facility ?? \App\Models\Facility::find($loggedInNavigator->facilityId);
+        $navigator = $loggedInNavigator;
+    } else {
+        $facility = $this->facilityService->findNearestScreeningFacility(
+            state: $request->stateOfResidence,
+            lga:   $request->lgaOfResidence,
+            area:  $request->areaOfResidence,  // 👈 new
+        );
+
+        $navigator = $facility ? $this->navigatorService->assignNavigator($facility) : null;
+    }
 
     // Persist the resolved coordinates on the registration itself —
     // area-level match first (most precise), falling back to the LGA's
@@ -124,6 +140,26 @@ $navigator = $facility ? $this->navigatorService->assignNavigator($facility) : n
             'clinicHoursDisplay' => $facility->formatClinicHours(),
         ] : null,
     ], 201);
+}
+
+/**
+ * Resolves the Navigator profile for the currently authenticated user, if
+ * any. Returns null for anonymous/public submissions (the Bloom
+ * self-registration form) or for an authenticated user who isn't an
+ * active navigator, so the caller can fall back to the normal
+ * nearest-facility matching in either case.
+ */
+private function resolveLoggedInNavigator(): ?Navigator
+{
+    $user = auth('api')->user();
+
+    if (!$user) {
+        return null;
+    }
+
+    return Navigator::where('userId', $user->id)
+        ->where('isActive', true)
+        ->first();
 }
 
 private function maskPhone(string $phone): string

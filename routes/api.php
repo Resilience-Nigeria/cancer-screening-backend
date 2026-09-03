@@ -24,7 +24,7 @@ use App\Http\Controllers\Api\ClientVisitController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Http\Controllers\Api\OtpController;
 use App\Http\Controllers\Api\NavigatorClientsController;
-
+use App\Http\Controllers\Api\QrCodeController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -37,6 +37,7 @@ Route::prefix('auth')->group(function () {
     });
 });
 
+Route::get('/qr-code', [QrCodeController::class, 'index']);
 // routes/api.php
 Route::get('/areas', function (\Illuminate\Http\Request $request) {
     $areas = DB::table('areaCoordinates')
@@ -94,6 +95,7 @@ Route::post('/otp/verify', [OtpController::class, 'verify']);
 Route::post('/otp/resend', [OtpController::class, 'resend']);
 
 // Route::post('/self-assessment', [SelfAssessmentController::class, 'store']);
+
 
 Route::match(['GET', 'POST'], '/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle']);
 
