@@ -20,12 +20,18 @@ class ProstateScreeningController extends Controller
         $validated = $request->validated();
 
         // Numeric conversions
-        if (isset($validated['psaLevel']) && $validated['psaLevel'] !== null) {
-            $validated['psaLevel'] = (float) $validated['psaLevel'];
-        }
-        if (isset($validated['ipssScore']) && $validated['ipssScore'] !== null) {
-            $validated['ipssScore'] = (int) $validated['ipssScore'];
-        }
+        // if (isset($validated['psaLevel']) && $validated['psaLevel'] !== null) {
+        //     $validated['psaLevel'] = (float) $validated['psaLevel'];
+        // }
+        // if (isset($validated['ipssScore']) && $validated['ipssScore'] !== null) {
+        //     $validated['ipssScore'] = (int) $validated['ipssScore'];
+        // }
+
+        foreach (['psaLevel', 'repeatPsaLevel', 'previousPsaLevel', 'prostateVolumeCc',
+          'psaDensity', 'freePsaPercent', 'psaVelocity'] as $k) {
+    if (isset($validated[$k])) $validated[$k] = (float) $validated[$k];
+}
+if (isset($validated['ageAtScreening'])) $validated['ageAtScreening'] = (int) $validated['ageAtScreening'];
 
         // Convert empty strings to null
         $validated = array_map(fn ($value) => $value === '' ? null : $value, $validated);
@@ -102,6 +108,29 @@ class ProstateScreeningController extends Controller
             'gleasonScore' => $screening->gleasonScore,
             'treatmentReferral' => $screening->treatmentReferral,
             'remarks' => $screening->remarks,
+
+
+
+            'ageAtScreening' => $screening->ageAtScreening,
+'consentGiven' => $screening->consentGiven,
+'counsellingDone' => $screening->counsellingDone,
+'sharedDecision' => $screening->sharedDecision,
+'psaTestDate' => optional($screening->psaTestDate)->toDateString(),
+'repeatPsaLevel' => $screening->repeatPsaLevel,
+'repeatPsaDate' => optional($screening->repeatPsaDate)->toDateString(),
+'dreFinding' => $screening->dreFinding,
+'previousPsaLevel' => $screening->previousPsaLevel,
+'previousPsaDate' => optional($screening->previousPsaDate)->toDateString(),
+'nextScreeningDate' => optional($screening->nextScreeningDate)->toDateString(),
+'prostateVolumeCc' => $screening->prostateVolumeCc,
+'psaDensity' => $screening->psaDensity,
+'freePsaPercent' => $screening->freePsaPercent,
+'psaVelocity' => $screening->psaVelocity,
+'mpMriResult' => $screening->mpMriResult,
+'priorNegativeBiopsy' => $screening->priorNegativeBiopsy,
+'highClinicalSuspicion' => $screening->highClinicalSuspicion,
+'biopsyIndicated' => $screening->biopsyIndicated,
+'biopsyIndicationReasons' => $screening->biopsyIndicationReasons,
         ];
     }
 

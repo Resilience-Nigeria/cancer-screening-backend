@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreProstateScreeningRequest extends FormRequest
 {
@@ -17,7 +18,6 @@ class StoreProstateScreeningRequest extends FormRequest
             'screeningResult' => $this->input('screeningResult', $this->input('result')),
         ];
 
-        // Accept legacy "referral" key as an alias for "treatmentReferral".
         if ($this->has('referral') && !$this->filled('treatmentReferral')) {
             $merge['treatmentReferral'] = $this->input('referral');
         }
@@ -31,48 +31,69 @@ class StoreProstateScreeningRequest extends FormRequest
 
     public function rules(): array
     {
+        $yn = ['nullable', 'in:yes,no'];
+
         return [
-            // Screening details
             'clientId' => ['nullable', 'string'],
             'screeningDate' => ['nullable', 'date'],
-            // "screeningResult" and "treatmentReferral" are auto-derived on the
-            // client from the symptom checklist + PSA/DRE thresholds (National
-            // Prostate Cancer Screening Algorithm) rather than picked manually,
-            // but the values submitted still have to be one of these.
+            // Derived on the client from the national prostate algorithm
             'screeningResult' => ['nullable', 'in:negative,positive,suspicious,non_suspicious'],
-            'psaLevel' => ['nullable', 'numeric', 'min:0', 'max:1000'],
-            // Column is enum('positive','negative')
-            'dreResult' => ['nullable', 'in:positive,negative'],
-            'ipssScore' => ['nullable', 'integer', 'min:0', 'max:35'],
             'treatmentReferral' => ['nullable', 'in:referred,not_referred'],
 
-            // Urinary / warning symptoms (existing 9 + 3 added per the
-            // screening algorithm's red-flag symptom list).
-            'poorUrinaryStream' => ['nullable', 'in:yes,no'],
-            'urgeIncontinence' => ['nullable', 'in:yes,no'],
-            'delayStartingUrination' => ['nullable', 'in:yes,no'],
-            'inabilityToHoldUrine' => ['nullable', 'in:yes,no'],
-            'terminalDribbling' => ['nullable', 'in:yes,no'],
-            'frequentDayUrination' => ['nullable', 'in:yes,no'],
-            'nocturia' => ['nullable', 'in:yes,no'],
-            'incompleteEmptying' => ['nullable', 'in:yes,no'],
-            'bloodInUrine' => ['nullable', 'in:yes,no'],
-            'inabilityToPassUrine' => ['nullable', 'in:yes,no'],
-            'bonePainHipBack' => ['nullable', 'in:yes,no'],
-            'unexplainedWeightLoss' => ['nullable', 'in:yes,no'],
+            // Step 1 — eligibility (men 45 to <75)
+            'ageAtScreening' => ['nullable', 'integer', 'min:0', 'max:120'],
+            'screeningPathway' => ['nullable', 'in:Symptomatic,Asymptomatic,Not Eligible'],
 
-            // Screening pathway routing (symptomatic vs asymptomatic), stored
-            // for audit purposes alongside the symptom checklist above.
-            'screeningPathway' => ['nullable', 'in:Symptomatic,Asymptomatic'],
+            // Steps 2–3 — consent, counselling, shared decision-making
+            'consentGiven' => $yn,
+            'counsellingDone' => $yn,
+            'sharedDecision' => ['nullable', 'in:proceed,declined'],
 
-            // PSA-deferment conditions and eligibility outcome.
-            'recentDre' => ['nullable', 'in:yes,no'],
-            'recentEjaculation' => ['nullable', 'in:yes,no'],
-            'recentUrinaryInfection' => ['nullable', 'in:yes,no'],
-            'recentVigorousExercise' => ['nullable', 'in:yes,no'],
-            'psaEligibility' => ['nullable', 'in:Eligible,Deferred'],
+            // Step 4 — primary tests
+            'psaTestDate' => ['nullable', 'date'],
+            'psaLevel' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'repeatPsaDate' => ['nullable', 'date'],
+            'repeatPsaLevel' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'dreFinding' => ['nullable', 'in:normal,nodularity,induration,asymmetry,equivocal'],
+            'dreResult' => ['nullable', 'in:positive,negative'], // derived from dreFinding
+            'previousPsaLevel' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'previousPsaDate' => ['nullable', 'date'],
+            'ipssScore' => ['nullable', 'integer', 'min:0', 'max:35'],
+
+            // Warning symptoms
+            'poorUrinaryStream' => $yn,
+            'urgeIncontinence' => $yn,
+            'delayStartingUrination' => $yn,
+            'inabilityToHoldUrine' => $yn,
+            'terminalDribbling' => $yn,
+            'frequentDayUrination' => $yn,
+            'nocturia' => $yn,
+            'incompleteEmptying' => $yn,
+            'bloodInUrine' => $yn,
+            'inabilityToPassUrine' => $yn,
+            'bonePainHipBack' => $yn,
+            'unexplainedWeightLoss' => $yn,
+
+            // PSA-deferment conditions
+            'recentDre' => $yn,
+            'recentEjaculation' => $yn,
+            'recentUrinaryInfection' => $yn,
+            'recentVigorousExercise' => $yn,
+            'psaEligibility' => ['nullable', 'in:Eligible,Deferred,Not Eligible,Pending Consent'],
             'recallDate' => ['nullable', 'date'],
+            'nextScreeningDate' => ['nullable', 'date'],
             'recommendedAction' => ['nullable', 'string', 'max:1000'],
+
+            // Step 7 — secondary risk assessment
+            'prostateVolumeCc' => ['nullable', 'numeric', 'min:0', 'max:500'],
+            'psaDensity' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'freePsaPercent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'psaVelocity' => ['nullable', 'numeric', 'min:-100', 'max:100'],
+            'mpMriResult' => ['nullable', 'in:not_done,negative,suspicious'],
+            'priorNegativeBiopsy' => $yn,
+            'highClinicalSuspicion' => $yn,
+            'biopsyIndicated' => $yn,
+            'biopsyIndicationReasons' => ['nullable', 'string', 'max:1000'],
 
             // Procedures
             'biopsyDone' => ['nullable', 'boolean'],
@@ -82,43 +103,45 @@ class StoreProstateScreeningRequest extends FormRequest
         ];
     }
 
+    /**
+     * Protocol rule: a repeat PSA must be at least 2 weeks after the first.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $v) {
+            $level = $this->input('repeatPsaLevel');
+            if ($level === null || $level === '') {
+                return;
+            }
+
+            $first = $this->input('psaTestDate') ?: $this->input('screeningDate');
+            $repeat = $this->input('repeatPsaDate');
+
+            if (!$first || !$repeat) {
+                $v->errors()->add('repeatPsaDate', 'Repeat PSA date is required with a repeat PSA level.');
+                return;
+            }
+
+            if (strtotime($repeat) - strtotime($first) < 14 * 86400) {
+                $v->errors()->add('repeatPsaDate', 'Repeat PSA must be at least 2 weeks after the first PSA.');
+            }
+        });
+    }
+
     public function messages(): array
     {
         return [
-            'screeningDate.required' => 'Screening date is required.',
-            'screeningResult.required' => 'Screening result is required.',
-
             'psaLevel.numeric' => 'PSA level must be a number.',
             'psaLevel.min' => 'PSA level cannot be negative.',
             'psaLevel.max' => 'PSA level value is too high.',
-
-            'dreResult.in' => 'DRE result must be positive or negative.',
-
+            'repeatPsaLevel.numeric' => 'Repeat PSA level must be a number.',
             'ipssScore.integer' => 'IPSS score must be a whole number.',
             'ipssScore.min' => 'IPSS score cannot be less than 0.',
             'ipssScore.max' => 'IPSS score cannot exceed 35.',
-
             'gleasonScore.required_if' => 'Gleason score is required when biopsy is done.',
-
             'treatmentReferral.in' => 'Referral status must be referred or not_referred.',
-
-            'poorUrinaryStream.in' => 'Please select yes or no for poor urinary stream.',
-            'urgeIncontinence.in' => 'Please select yes or no for urge incontinence.',
-            'delayStartingUrination.in' => 'Please select yes or no for delay starting urination.',
-            'inabilityToHoldUrine.in' => 'Please select yes or no for inability to hold urine.',
-            'terminalDribbling.in' => 'Please select yes or no for terminal dribbling.',
-            'frequentDayUrination.in' => 'Please select yes or no for frequent day urination.',
-            'nocturia.in' => 'Please select yes or no for nocturia.',
-            'incompleteEmptying.in' => 'Please select yes or no for incomplete emptying.',
-            'bloodInUrine.in' => 'Please select yes or no for blood in urine.',
-            'inabilityToPassUrine.in' => 'Please select yes or no for inability to pass urine.',
-            'bonePainHipBack.in' => 'Please select yes or no for persistent bone/hip/back pain.',
-            'unexplainedWeightLoss.in' => 'Please select yes or no for unexplained weight loss.',
-
-            'recentDre.in' => 'Please select yes or no for recent DRE / prostate massage.',
-            'recentEjaculation.in' => 'Please select yes or no for recent ejaculation.',
-            'recentUrinaryInfection.in' => 'Please select yes or no for recent urinary infection / catheterisation.',
-            'recentVigorousExercise.in' => 'Please select yes or no for recent vigorous exercise / cycling.',
+            'dreFinding.in' => 'DRE finding must be normal, nodularity, induration, asymmetry or equivocal.',
+            'freePsaPercent.max' => '% free PSA cannot exceed 100.',
         ];
     }
 }

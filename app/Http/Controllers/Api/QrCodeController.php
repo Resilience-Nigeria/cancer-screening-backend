@@ -14,7 +14,7 @@ class QrCodeController extends Controller
 
 $qr = QrCode::format('png')
     ->size(300)
-    ->generate('https://ncsr.nicrat.gov.ng/front/bloom');
+    ->generate('https://icw-app.nicrat.gov.ng/icw2026/certificate/');
 
 return response($qr)->header('Content-Type', 'image/png');
     }

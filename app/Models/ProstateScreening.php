@@ -52,6 +52,14 @@ class ProstateScreening extends Model
         'recommendedAction',
 
         'remarks',
+
+
+        'ageAtScreening', 'consentGiven', 'counsellingDone', 'sharedDecision',
+'psaTestDate', 'repeatPsaLevel', 'repeatPsaDate', 'dreFinding',
+'previousPsaLevel', 'previousPsaDate', 'nextScreeningDate',
+'prostateVolumeCc', 'psaDensity', 'freePsaPercent', 'psaVelocity',
+'mpMriResult', 'priorNegativeBiopsy', 'highClinicalSuspicion',
+'biopsyIndicated', 'biopsyIndicationReasons',
     ];
 
     protected $casts = [
@@ -59,6 +67,11 @@ class ProstateScreening extends Model
         'recallDate' => 'date',
         'biopsyDone' => 'boolean',
         'ipssScore' => 'integer',
+        'psaTestDate' => 'date',
+'repeatPsaDate' => 'date',
+'previousPsaDate' => 'date',
+'nextScreeningDate' => 'date',
+'ageAtScreening' => 'integer',
     ];
 
     public function visit(): BelongsTo
