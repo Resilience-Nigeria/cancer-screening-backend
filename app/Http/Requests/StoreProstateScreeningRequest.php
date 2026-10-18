@@ -22,8 +22,10 @@ class StoreProstateScreeningRequest extends FormRequest
             $merge['treatmentReferral'] = $this->input('referral');
         }
 
-        if ($this->has('biopsyDone') && is_string($this->input('biopsyDone'))) {
-            $merge['biopsyDone'] = filter_var($this->input('biopsyDone'), FILTER_VALIDATE_BOOLEAN);
+        foreach (['biopsyDone', 'recallBookNow', 'urologyBookNow'] as $bool) {
+            if ($this->has($bool) && is_string($this->input($bool))) {
+                $merge[$bool] = filter_var($this->input($bool), FILTER_VALIDATE_BOOLEAN);
+            }
         }
 
         $this->merge($merge);
@@ -59,6 +61,16 @@ class StoreProstateScreeningRequest extends FormRequest
             'previousPsaLevel' => ['nullable', 'numeric', 'min:0', 'max:1000'],
             'previousPsaDate' => ['nullable', 'date'],
             'ipssScore' => ['nullable', 'integer', 'min:0', 'max:35'],
+            // I-PSS: seven items scored 0–5, severity (derived), and the single 0–6 quality-of-life item
+            'ipssIncompleteEmptying' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'ipssFrequency' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'ipssIntermittency' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'ipssUrgency' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'ipssWeakStream' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'ipssStraining' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'ipssNocturia' => ['nullable', 'integer', 'min:0', 'max:5'],
+            'ipssSeverity' => ['nullable', 'in:Mild,Moderate,Severe'],
+            'ipssQualityOfLife' => ['nullable', 'integer', 'min:0', 'max:6'],
 
             // Warning symptoms
             'poorUrinaryStream' => $yn,
@@ -83,6 +95,20 @@ class StoreProstateScreeningRequest extends FormRequest
             'recallDate' => ['nullable', 'date'],
             'nextScreeningDate' => ['nullable', 'date'],
             'recommendedAction' => ['nullable', 'string', 'max:1000'],
+
+            // Derived recall schedule (Steps 5–6)
+            'psaCategory' => ['nullable', 'string', 'max:80'],
+            'recallInterval' => ['nullable', 'string', 'max:60'],
+
+            // Bookings: next screening / repeat PSA, and urology appointment
+            'recallBookNow' => ['nullable', 'boolean'],
+            'recallBookingDate' => ['nullable', 'date'],
+            'recallBookingFacilityId' => ['nullable', 'integer'],
+            'recallBookingNotes' => ['nullable', 'string', 'max:2000'],
+            'urologyBookNow' => ['nullable', 'boolean'],
+            'urologyBookingDate' => ['nullable', 'date'],
+            'urologyBookingFacilityId' => ['nullable', 'integer'],
+            'urologyBookingNotes' => ['nullable', 'string', 'max:2000'],
 
             // Step 7 — secondary risk assessment
             'prostateVolumeCc' => ['nullable', 'numeric', 'min:0', 'max:500'],

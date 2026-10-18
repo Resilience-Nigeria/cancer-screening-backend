@@ -49,12 +49,37 @@ class ClientRiskProfile extends Model
         'bloodPressureSystolic',
         'bloodPressureDiastolic',
         'pulse',
+
+        'hivArtStatus', 'hpvVaccination', 'lastMenstrualPeriod', 'pregnancyStatus', 'menopausalStatus',
+'symptomAbnormalBleeding', 'symptomPostCoitalBleeding', 'symptomPelvicPain', 'symptomDischarge',
+'symptomOther', 'symptomNone', 'symptomOtherDetail', 'symptomStatus',
+'prevCervicalScreened', 'prevCervicalScreeningDate',
+'prevCervicalTestHpv', 'prevCervicalTestVia', 'prevCervicalTestPap',
+'prevCervicalTestColposcopy', 'prevCervicalTestOther', 'prevCervicalTestOtherDetail',
+'prevCervicalResult', 'prevCervicalTreated', 'prevCervicalTreatmentType',
     ];
+
+
+
 
     protected $casts = [
         // 'familyHistory' => 'boolean',
         'comorbiditiesJson' => 'array',
         'recordedAt' => 'datetime',
+
+        'lastMenstrualPeriod' => 'date',
+'prevCervicalScreeningDate' => 'date',
+'symptomAbnormalBleeding' => 'boolean',
+'symptomPostCoitalBleeding' => 'boolean',
+'symptomPelvicPain' => 'boolean',
+'symptomDischarge' => 'boolean',
+'symptomOther' => 'boolean',
+'symptomNone' => 'boolean',
+'prevCervicalTestHpv' => 'boolean',
+'prevCervicalTestVia' => 'boolean',
+'prevCervicalTestPap' => 'boolean',
+'prevCervicalTestColposcopy' => 'boolean',
+'prevCervicalTestOther' => 'boolean',
     ];
 
     public function uniqueIds()

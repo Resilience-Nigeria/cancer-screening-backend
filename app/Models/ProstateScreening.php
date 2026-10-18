@@ -23,8 +23,7 @@ class ProstateScreening extends Model
         'gleasonScore',
         'treatmentReferral',
 
-        // Urinary / warning symptoms (existing 9 + 3 red-flag symptoms added
-        // per the National Prostate Cancer Screening Algorithm)
+        // Urinary / warning symptoms
         'poorUrinaryStream',
         'urgeIncontinence',
         'delayStartingUrination',
@@ -38,8 +37,6 @@ class ProstateScreening extends Model
         'bonePainHipBack',
         'unexplainedWeightLoss',
 
-        // Screening pathway (symptomatic → clinical/diagnostic referral vs
-        // asymptomatic → continue routine screening)
         'screeningPathway',
 
         // PSA-deferment conditions and eligibility outcome
@@ -51,27 +48,80 @@ class ProstateScreening extends Model
         'recallDate',
         'recommendedAction',
 
+        // Step 1 — eligibility; Steps 2–3 — consent, counselling, shared decision
+        'ageAtScreening',
+        'consentGiven',
+        'counsellingDone',
+        'sharedDecision',
+
+        // Step 4 — primary tests
+        'psaTestDate',
+        'repeatPsaLevel',
+        'repeatPsaDate',
+        'dreFinding',
+        'previousPsaLevel',
+        'previousPsaDate',
+
+        // Step 5/6 — recall schedule and bookings
+        'nextScreeningDate',
+        'psaCategory',
+        'recallInterval',
+        'recallBookNow',
+        'recallBookingDate',
+        'recallBookingFacilityId',
+        'recallBookingNotes',
+        'urologyBookNow',
+        'urologyBookingDate',
+        'urologyBookingFacilityId',
+        'urologyBookingNotes',
+
+        // Step 7 — secondary risk assessment
+        'prostateVolumeCc',
+        'psaDensity',
+        'freePsaPercent',
+        'psaVelocity',
+        'mpMriResult',
+        'priorNegativeBiopsy',
+        'highClinicalSuspicion',
+        'biopsyIndicated',
+        'biopsyIndicationReasons',
+
+        // I-PSS
+        'ipssIncompleteEmptying',
+        'ipssFrequency',
+        'ipssIntermittency',
+        'ipssUrgency',
+        'ipssWeakStream',
+        'ipssStraining',
+        'ipssNocturia',
+        'ipssSeverity',
+        'ipssQualityOfLife',
+
         'remarks',
-
-
-        'ageAtScreening', 'consentGiven', 'counsellingDone', 'sharedDecision',
-'psaTestDate', 'repeatPsaLevel', 'repeatPsaDate', 'dreFinding',
-'previousPsaLevel', 'previousPsaDate', 'nextScreeningDate',
-'prostateVolumeCc', 'psaDensity', 'freePsaPercent', 'psaVelocity',
-'mpMriResult', 'priorNegativeBiopsy', 'highClinicalSuspicion',
-'biopsyIndicated', 'biopsyIndicationReasons',
     ];
 
     protected $casts = [
         'screeningDate' => 'date',
         'recallDate' => 'date',
-        'biopsyDone' => 'boolean',
-        'ipssScore' => 'integer',
         'psaTestDate' => 'date',
-'repeatPsaDate' => 'date',
-'previousPsaDate' => 'date',
-'nextScreeningDate' => 'date',
-'ageAtScreening' => 'integer',
+        'repeatPsaDate' => 'date',
+        'previousPsaDate' => 'date',
+        'nextScreeningDate' => 'date',
+        'recallBookingDate' => 'date',
+        'urologyBookingDate' => 'date',
+        'biopsyDone' => 'boolean',
+        'recallBookNow' => 'boolean',
+        'urologyBookNow' => 'boolean',
+        'ipssScore' => 'integer',
+        'ageAtScreening' => 'integer',
+        'ipssIncompleteEmptying' => 'integer',
+        'ipssFrequency' => 'integer',
+        'ipssIntermittency' => 'integer',
+        'ipssUrgency' => 'integer',
+        'ipssWeakStream' => 'integer',
+        'ipssStraining' => 'integer',
+        'ipssNocturia' => 'integer',
+        'ipssQualityOfLife' => 'integer',
     ];
 
     public function visit(): BelongsTo

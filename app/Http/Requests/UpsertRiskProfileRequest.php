@@ -71,6 +71,33 @@ class UpsertRiskProfileRequest extends FormRequest
             'hypertension' => ['nullable', 'in:yes,no,unknown'],
             'previousScreening' => ['nullable', 'in:yes,no,unknown'],
             'previousScreeningDetails' => ['nullable', 'string', 'max:255'],
+
+            'hivArtStatus' => ['nullable', 'in:on_art,not_on_art'],
+'hpvVaccination' => ['nullable', 'in:yes,no'],
+'lastMenstrualPeriod' => ['nullable', 'date'],
+'pregnancyStatus' => ['nullable', 'in:pregnant,not_pregnant,tbd'],
+'menopausalStatus' => ['nullable', 'in:pre,peri,post'],
+
+'symptomAbnormalBleeding' => ['nullable', 'boolean'],
+'symptomPostCoitalBleeding' => ['nullable', 'boolean'],
+'symptomPelvicPain' => ['nullable', 'boolean'],
+'symptomDischarge' => ['nullable', 'boolean'],
+'symptomOther' => ['nullable', 'boolean'],
+'symptomNone' => ['nullable', 'boolean'],
+'symptomOtherDetail' => ['nullable', 'string', 'max:255'],
+'symptomStatus' => ['nullable', 'in:Symptomatic,Asymptomatic'],
+
+'prevCervicalScreened' => ['nullable', 'in:yes,no'],
+'prevCervicalScreeningDate' => ['nullable', 'date'],
+'prevCervicalTestHpv' => ['nullable', 'boolean'],
+'prevCervicalTestVia' => ['nullable', 'boolean'],
+'prevCervicalTestPap' => ['nullable', 'boolean'],
+'prevCervicalTestColposcopy' => ['nullable', 'boolean'],
+'prevCervicalTestOther' => ['nullable', 'boolean'],
+'prevCervicalTestOtherDetail' => ['nullable', 'string', 'max:255'],
+'prevCervicalResult' => ['nullable', 'in:negative,positive_precancer,suspected_cancer,unknown'],
+'prevCervicalTreated' => ['nullable', 'in:yes,no,unknown'],
+'prevCervicalTreatmentType' => ['nullable', 'in:cryotherapy,thermal_ablation,excision_leep,unknown'],
         ];
     }
 }

@@ -29,6 +29,11 @@ class StoreScreeningVisitRequest extends FormRequest
             'visitType' => ['required', 'in:initial,follow_up'],
             'notes' => ['nullable', 'string'],
             'treatmentReferral' => ['nullable', 'boolean'],
+            'reasonForVisit' => ['nullable', 'in:routine_screening,referral,abnormality_detected'],
+'referredIn' => ['nullable', 'in:yes,no'],
+'referralNumber' => ['nullable', 'string', 'max:100'],
+'entryPoint' => ['nullable', 'in:art_clinic,fp_clinic,anc,l_and_d,other'],
+'entryPointOther' => ['nullable', 'string', 'max:255'],
         ];
     }
 }
