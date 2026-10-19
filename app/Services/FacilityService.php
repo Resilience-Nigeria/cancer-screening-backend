@@ -163,7 +163,11 @@ class FacilityService
         string $lga,
         ?string $area = null,
     ): ?Facility {
-        $levelFilter = fn ($q) => $q->whereIn('facilityLevel', ['subhub', 'hub']);
+        // $levelFilter = fn ($q) => $q->whereIn('facilityLevel', ['subhub', 'hub']);
+        $levelFilter = fn ($q) => $q->where(
+    fn ($w) => $w->whereJsonContains('facilityLevels', 'subhub')
+                 ->orWhereJsonContains('facilityLevels', 'hub')
+);
 
         // ── Get coordinates — area first, then LGA center ─────────────
         // Runs before the same-LGA shortcut below, for the same reason

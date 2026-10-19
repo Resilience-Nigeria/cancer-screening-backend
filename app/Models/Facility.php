@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Facility extends Model
 {
@@ -40,6 +41,8 @@ class Facility extends Model
         'navigatorEmail',
         'whatsappNumber',
         'isActive',
+        'facilityLevels',
+
     ];
 
     protected $casts = [
@@ -52,6 +55,7 @@ class Facility extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'isActive' => 'boolean',
+        'facilityLevels' => 'array',
     ];
 
     /**
@@ -115,9 +119,9 @@ class Facility extends Model
      */
     public function findAncestorAtLevel(string $level, int $maxDepth = 10): ?self
     {
-        if ($this->facilityLevel === $level) {
-            return $this;
-        }
+        if ($this->hasLevel($level)) {   // was: $this->facilityLevel === $level
+    return $this;
+}
 
         $facility = $this;
         $depth = 0;
@@ -130,9 +134,9 @@ class Facility extends Model
                 return null;
             }
 
-            if ($facility->facilityLevel === $level) {
-                return $facility;
-            }
+            if ($facility->hasLevel($level)) {   // was: $facility->facilityLevel === $level
+    return $facility;
+}
         }
 
         return null;
@@ -279,4 +283,28 @@ public function services(): BelongsToMany
     return $this->belongsToMany(Service::class, 'facilityServices', 'facilityId', 'serviceId')
         ->wherePivot('isActive', true);
 }
+
+public const LEVEL_ORDER = ['feeder', 'subhub', 'hub']; // lowest → highest
+
+protected static function booted(): void
+{
+    // Keep the legacy single-tier column = highest tier held
+    static::saving(function (Facility $f) {
+        if ($f->isDirty('facilityLevels')) {
+            $f->facilityLevel = self::highestLevel($f->facilityLevels ?? []);
+        }
+    });
+}
+
+public static function highestLevel(array $levels): ?string
+{
+    $ordered = array_values(array_intersect(self::LEVEL_ORDER, $levels));
+    return $ordered ? end($ordered) : null;
+}
+
+public function hasLevel(string $level): bool
+{
+    return in_array($level, $this->facilityLevels ?? [], true);
+}
+
 }
