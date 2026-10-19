@@ -50,17 +50,19 @@ class ClientRiskProfile extends Model
         'bloodPressureDiastolic',
         'pulse',
 
+        // Previous exposure to ionizing radiation
+        'ionizingRadiationExposure',
+        'ionizingRadiationType',
+        'ionizingRadiationOther',
+
         'hivArtStatus', 'hpvVaccination', 'lastMenstrualPeriod', 'pregnancyStatus', 'menopausalStatus',
-'symptomAbnormalBleeding', 'symptomPostCoitalBleeding', 'symptomPelvicPain', 'symptomDischarge',
-'symptomOther', 'symptomNone', 'symptomOtherDetail', 'symptomStatus',
-'prevCervicalScreened', 'prevCervicalScreeningDate',
-'prevCervicalTestHpv', 'prevCervicalTestVia', 'prevCervicalTestPap',
-'prevCervicalTestColposcopy', 'prevCervicalTestOther', 'prevCervicalTestOtherDetail',
-'prevCervicalResult', 'prevCervicalTreated', 'prevCervicalTreatmentType',
+        'symptomAbnormalBleeding', 'symptomPostCoitalBleeding', 'symptomPelvicPain', 'symptomDischarge',
+        'symptomOther', 'symptomNone', 'symptomOtherDetail', 'symptomStatus',
+        'prevCervicalScreened', 'prevCervicalScreeningDate',
+        'prevCervicalTestHpv', 'prevCervicalTestVia', 'prevCervicalTestPap',
+        'prevCervicalTestColposcopy', 'prevCervicalTestOther', 'prevCervicalTestOtherDetail',
+        'prevCervicalResult', 'prevCervicalTreated', 'prevCervicalTreatmentType',
     ];
-
-
-
 
     protected $casts = [
         // 'familyHistory' => 'boolean',
@@ -68,25 +70,25 @@ class ClientRiskProfile extends Model
         'recordedAt' => 'datetime',
 
         'lastMenstrualPeriod' => 'date',
-'prevCervicalScreeningDate' => 'date',
-'symptomAbnormalBleeding' => 'boolean',
-'symptomPostCoitalBleeding' => 'boolean',
-'symptomPelvicPain' => 'boolean',
-'symptomDischarge' => 'boolean',
-'symptomOther' => 'boolean',
-'symptomNone' => 'boolean',
-'prevCervicalTestHpv' => 'boolean',
-'prevCervicalTestVia' => 'boolean',
-'prevCervicalTestPap' => 'boolean',
-'prevCervicalTestColposcopy' => 'boolean',
-'prevCervicalTestOther' => 'boolean',
+        'prevCervicalScreeningDate' => 'date',
+        'symptomAbnormalBleeding' => 'boolean',
+        'symptomPostCoitalBleeding' => 'boolean',
+        'symptomPelvicPain' => 'boolean',
+        'symptomDischarge' => 'boolean',
+        'symptomOther' => 'boolean',
+        'symptomNone' => 'boolean',
+        'prevCervicalTestHpv' => 'boolean',
+        'prevCervicalTestVia' => 'boolean',
+        'prevCervicalTestPap' => 'boolean',
+        'prevCervicalTestColposcopy' => 'boolean',
+        'prevCervicalTestOther' => 'boolean',
     ];
 
     public function uniqueIds()
     {
         return ['riskProfileId'];
     }
-    
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class, 'clientId');

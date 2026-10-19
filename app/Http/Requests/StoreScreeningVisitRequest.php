@@ -32,7 +32,7 @@ class StoreScreeningVisitRequest extends FormRequest
             'reasonForVisit' => ['nullable', 'in:routine_screening,referral,abnormality_detected'],
 'referredIn' => ['nullable', 'in:yes,no'],
 'referralNumber' => ['nullable', 'string', 'max:100'],
-'entryPoint' => ['nullable', 'in:art_clinic,fp_clinic,anc,l_and_d,other'],
+'entryPoint' => ['nullable', 'in:art_clinic,fp_clinic,anc,l_and_d,other,opd,wellness_center,preventive_oncology'],
 'entryPointOther' => ['nullable', 'string', 'max:255'],
         ];
     }

@@ -51,6 +51,20 @@ class BreastScreeningController extends Controller
             );
         }
 
+        // IHC booking — same pattern, only when IHC was requested AND the user chose to book now.
+        // If your StoresServiceBookings trait restricts the allowed service names, add 'ihc' to it.
+        if (($data['ihcRequested'] ?? false) && ($data['ihcBookNow'] ?? false)) {
+            $this->storeBooking(
+                $visit->clientId,
+                $visit->visitId,
+                'ihc',
+                'breast',
+                $data['ihcBookingDate'] ?? null,
+                $data['ihcBookingFacilityId'] ?? null,
+                $data['ihcBookingNotes'] ?? null
+            );
+        }
+
         return response()->json([
             'message' => 'Breast screening saved successfully',
             'screening' => $screening,

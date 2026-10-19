@@ -40,7 +40,7 @@ class BreastScreening extends Model
         'dischargeType',
         'skinChanges',
         'breastPain',
-        'previousBreastSurgery',
+        'previousBreastSurgery', // legacy — no longer collected by the UI
         'previousBiopsy',
         'ageAtFirstMenstruation',
         'ageAtMenopause',
@@ -54,6 +54,9 @@ class BreastScreening extends Model
         'histologyResult',
         'ihcRequested',
         'ihcResult',
+        'ihcBookingDate',
+        'ihcBookingFacilityId',
+        'ihcBookingNotes',
         'referralCompleted',
         'treatmentReferral',
 
@@ -65,6 +68,7 @@ class BreastScreening extends Model
         'biopsyDone' => 'boolean',
         'ihcRequested' => 'boolean',
         'biopsyBookingDate' => 'date',
+        'ihcBookingDate' => 'date',
         'referralCompleted' => 'boolean',
         'breastfeedingDuration' => 'integer',
         'ageAtFirstMenstruation' => 'integer',

@@ -44,7 +44,9 @@ class UpsertRiskProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'familyHistory' => ['required', 'in:yes,no,unknown'],
+            // Now nullable: the risk assessment only asks the questions relevant to the cancer
+            // type(s) being screened, and family history is not asked for liver-only screening.
+            'familyHistory' => ['nullable', 'in:yes,no,unknown'],
             'smokingStatus' => ['nullable', 'in:non_smoker,never,active_smoker,current_smoker,passive_smoker,ocassional,occasional,former_smoker,ex_smoker'],
             'alcoholConsumption' => ['nullable', 'in:none,never,non_drinker,occasional,occasionally,light_drinker,regular,regularly,weekly,daily,heavy_drinker'],
             'physicalActivityLevel' => ['nullable', 'in:regular,sometimes,rarely'],
@@ -60,44 +62,53 @@ class UpsertRiskProfileRequest extends FormRequest
             'ageAtMenopause' => ['nullable', 'integer', 'min:0', 'max:100'],
             'breastfeedingHistory' => ['nullable', 'in:yes,no'],
             'breastfeedingDuration' => ['nullable', 'integer', 'min:0', 'max:1200'],
+            // Legacy: no longer collected by the UI, kept so older records/clients still validate.
             'previousBreastSurgery' => ['nullable', 'in:yes,no'],
 
             // Stage 2, Section C — medical history confirm checklist
             'previousCancer' => ['nullable', 'in:yes,no,unknown'],
+            // Now holds the cancer type (breast, cervical, prostate, colorectal, liver)
             'previousCancerDetails' => ['nullable', 'string', 'max:255'],
+            // Legacy: previous surgeries is no longer collected by the UI
             'previousSurgeries' => ['nullable', 'in:yes,no,unknown'],
             'previousSurgeriesDetails' => ['nullable', 'string', 'max:255'],
             'diabetes' => ['nullable', 'in:yes,no,unknown'],
             'hypertension' => ['nullable', 'in:yes,no,unknown'],
             'previousScreening' => ['nullable', 'in:yes,no,unknown'],
+            // Now holds the cancer type that was screened
             'previousScreeningDetails' => ['nullable', 'string', 'max:255'],
 
+            // Previous exposure to ionizing radiation
+            'ionizingRadiationExposure' => ['nullable', 'in:yes,no'],
+            'ionizingRadiationType' => ['nullable', 'in:xray,ct_scan,other'],
+            'ionizingRadiationOther' => ['nullable', 'string', 'max:255'],
+
             'hivArtStatus' => ['nullable', 'in:on_art,not_on_art'],
-'hpvVaccination' => ['nullable', 'in:yes,no'],
-'lastMenstrualPeriod' => ['nullable', 'date'],
-'pregnancyStatus' => ['nullable', 'in:pregnant,not_pregnant,tbd'],
-'menopausalStatus' => ['nullable', 'in:pre,peri,post'],
+            'hpvVaccination' => ['nullable', 'in:yes,no'],
+            'lastMenstrualPeriod' => ['nullable', 'date'],
+            'pregnancyStatus' => ['nullable', 'in:pregnant,not_pregnant,tbd'],
+            'menopausalStatus' => ['nullable', 'in:pre,peri,post'],
 
-'symptomAbnormalBleeding' => ['nullable', 'boolean'],
-'symptomPostCoitalBleeding' => ['nullable', 'boolean'],
-'symptomPelvicPain' => ['nullable', 'boolean'],
-'symptomDischarge' => ['nullable', 'boolean'],
-'symptomOther' => ['nullable', 'boolean'],
-'symptomNone' => ['nullable', 'boolean'],
-'symptomOtherDetail' => ['nullable', 'string', 'max:255'],
-'symptomStatus' => ['nullable', 'in:Symptomatic,Asymptomatic'],
+            'symptomAbnormalBleeding' => ['nullable', 'boolean'],
+            'symptomPostCoitalBleeding' => ['nullable', 'boolean'],
+            'symptomPelvicPain' => ['nullable', 'boolean'],
+            'symptomDischarge' => ['nullable', 'boolean'],
+            'symptomOther' => ['nullable', 'boolean'],
+            'symptomNone' => ['nullable', 'boolean'],
+            'symptomOtherDetail' => ['nullable', 'string', 'max:255'],
+            'symptomStatus' => ['nullable', 'in:Symptomatic,Asymptomatic'],
 
-'prevCervicalScreened' => ['nullable', 'in:yes,no'],
-'prevCervicalScreeningDate' => ['nullable', 'date'],
-'prevCervicalTestHpv' => ['nullable', 'boolean'],
-'prevCervicalTestVia' => ['nullable', 'boolean'],
-'prevCervicalTestPap' => ['nullable', 'boolean'],
-'prevCervicalTestColposcopy' => ['nullable', 'boolean'],
-'prevCervicalTestOther' => ['nullable', 'boolean'],
-'prevCervicalTestOtherDetail' => ['nullable', 'string', 'max:255'],
-'prevCervicalResult' => ['nullable', 'in:negative,positive_precancer,suspected_cancer,unknown'],
-'prevCervicalTreated' => ['nullable', 'in:yes,no,unknown'],
-'prevCervicalTreatmentType' => ['nullable', 'in:cryotherapy,thermal_ablation,excision_leep,unknown'],
+            'prevCervicalScreened' => ['nullable', 'in:yes,no'],
+            'prevCervicalScreeningDate' => ['nullable', 'date'],
+            'prevCervicalTestHpv' => ['nullable', 'boolean'],
+            'prevCervicalTestVia' => ['nullable', 'boolean'],
+            'prevCervicalTestPap' => ['nullable', 'boolean'],
+            'prevCervicalTestColposcopy' => ['nullable', 'boolean'],
+            'prevCervicalTestOther' => ['nullable', 'boolean'],
+            'prevCervicalTestOtherDetail' => ['nullable', 'string', 'max:255'],
+            'prevCervicalResult' => ['nullable', 'in:negative,positive_precancer,suspected_cancer,unknown'],
+            'prevCervicalTreated' => ['nullable', 'in:yes,no,unknown'],
+            'prevCervicalTreatmentType' => ['nullable', 'in:cryotherapy,thermal_ablation,excision_leep,unknown'],
         ];
     }
 }

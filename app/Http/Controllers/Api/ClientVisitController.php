@@ -20,6 +20,11 @@ class ClientVisitController extends Controller
      * Visits not yet through the Outcome step, each with a computed
      * resumeStep so the Stage 2 wizard can drop the user back exactly
      * where they left off instead of restarting from Registration.
+     *
+     * Stage 2 order is now: Cancer Type(s) -> Risk Assessment -> Physical Exam ->
+     * Screening -> Outcome. Cancer types are only stored once a screening record
+     * is saved, so a visit with no screening record yet resumes at the cancer-type
+     * step (the risk profile and exam are pre-filled from what was already saved).
      */
     public function incomplete(string $clientId): JsonResponse
     {
@@ -54,9 +59,9 @@ class ClientVisitController extends Controller
             }
 
             $resumeStep = match (true) {
+                !$anyRecordExists => 'cancerTypeSelect',
                 !$hasRiskProfile => 'riskVerify',
                 !$visit->examination => 'physicalExam',
-                !$anyRecordExists => 'cancerTypeSelect',
                 $anyResultMissing => 'screening',
                 default => 'outcome',
             };

@@ -28,7 +28,7 @@ class StoreCervicalScreeningRequest extends FormRequest
             'screeningResult' => $this->input('screeningResult', $this->input('result')),
         ];
 
-        foreach (['ablationBookNow', 'leepBookNow', 'colposcopyBookNow', 'colposcopyDone', 'biopsyDone'] as $bool) {
+        foreach (['ablationBookNow', 'leepBookNow', 'colposcopyBookNow', 'hpvBookNow', 'colposcopyDone', 'biopsyDone'] as $bool) {
             if ($this->has($bool) && is_string($this->input($bool))) {
                 $merge[$bool] = filter_var($this->input($bool), FILTER_VALIDATE_BOOLEAN);
             }
@@ -47,6 +47,12 @@ class StoreCervicalScreeningRequest extends FormRequest
 
             'hpvResult' => ['nullable', 'string', 'max:255'],
             'hpvGenotype' => ['nullable', 'in:16,18,35,45,other'],
+
+            // HPV test booking
+            'hpvBookNow' => ['nullable', 'boolean'],
+            'hpvBookingDate' => ['nullable', 'date'],
+            'hpvBookingFacilityId' => ['nullable', 'integer'],
+            'hpvBookingNotes' => ['nullable', 'string', 'max:2000'],
 
             // Nothing here is required_if — per the wizard's existing "don't
             // make anything required" convention, since results/bookings

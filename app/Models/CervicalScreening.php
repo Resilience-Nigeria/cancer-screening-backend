@@ -24,6 +24,12 @@ class CervicalScreening extends Model
         'biopsyResult',
         'treatmentReferral',
 
+        // HPV test booking
+        'hpvBookNow',
+        'hpvBookingDate',
+        'hpvBookingFacilityId',
+        'hpvBookingNotes',
+
         // Ablation eligibility + booking (mirrors breast's biopsyBookNow pattern)
         'ablationEligibility',
         'ablationBookNow',
@@ -62,6 +68,8 @@ class CervicalScreening extends Model
         'screeningDate' => 'date',
         'colposcopyDone' => 'boolean',
         'biopsyDone' => 'boolean',
+        'hpvBookNow' => 'boolean',
+        'hpvBookingDate' => 'date',
         'ablationBookNow' => 'boolean',
         'ablationBookingDate' => 'date',
         'leepBookNow' => 'boolean',

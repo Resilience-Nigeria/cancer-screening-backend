@@ -23,7 +23,7 @@ class StoreBreastScreeningRequest extends FormRequest
             $merge['method'] = 'uss';
         }
 
-        foreach (['biopsyDone', 'referralCompleted', 'ihcRequested', 'biopsyBookNow'] as $bool) {
+        foreach (['biopsyDone', 'referralCompleted', 'ihcRequested', 'biopsyBookNow', 'ihcBookNow'] as $bool) {
             if ($this->has($bool) && is_string($this->input($bool))) {
                 $merge[$bool] = filter_var($this->input($bool), FILTER_VALIDATE_BOOLEAN);
             }
@@ -60,6 +60,8 @@ class StoreBreastScreeningRequest extends FormRequest
             'dischargeType' => ['nullable', 'required_if:breastNippleDischarge,yes', 'in:bloody,clear,milky,purulent'],
             'skinChanges' => ['nullable', 'in:yes,no'],
             'breastPain' => ['nullable', 'in:yes,no'],
+            // previousBreastSurgery is no longer collected by the UI. The rule stays so older
+            // clients/records that still send it keep working; drop it (and the column) when convenient.
             'previousBreastSurgery' => ['nullable', 'in:yes,no'],
             'previousBiopsy' => ['nullable', 'in:yes,no,unknown'],
             'ageAtFirstMenstruation' => ['nullable', 'integer', 'min:0', 'max:30'],
@@ -77,6 +79,13 @@ class StoreBreastScreeningRequest extends FormRequest
             'histologyResult' => ['nullable', 'in:malignant,benign,positive,negative'],
             'ihcRequested' => ['nullable', 'boolean'],
             'ihcResult' => ['nullable', 'string', 'max:255'],
+
+            // IHC booking (only meaningful when ihcRequested is true)
+            'ihcBookNow' => ['nullable', 'boolean'],
+            'ihcBookingDate' => ['nullable', 'date'],
+            'ihcBookingFacilityId' => ['nullable', 'integer', 'exists:facilities,facilityId'],
+            'ihcBookingNotes' => ['nullable', 'string', 'max:2000'],
+
             'referralCompleted' => ['nullable', 'boolean'],
             'treatmentReferral' => ['nullable', 'in:referred,not_referred'],
 

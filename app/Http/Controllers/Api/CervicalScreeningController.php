@@ -105,6 +105,20 @@ class CervicalScreeningController extends Controller
             );
         }
 
+        // HPV test booking. If your StoresServiceBookings trait restricts the allowed
+        // service names, add 'hpv' to it.
+        if ($data['hpvBookNow'] ?? false) {
+            $this->storeBooking(
+                $visit->clientId,
+                $visit->visitId,
+                'hpv',
+                'cervical',
+                $data['hpvBookingDate'] ?? null,
+                $data['hpvBookingFacilityId'] ?? null,
+                $data['hpvBookingNotes'] ?? null
+            );
+        }
+
         return response()->json([
             'message' => 'Cervical screening saved successfully',
             'screening' => $screening,
