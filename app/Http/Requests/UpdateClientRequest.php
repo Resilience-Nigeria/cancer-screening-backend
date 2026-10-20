@@ -13,18 +13,6 @@ class UpdateClientRequest extends FormRequest
 
     public function rules(): array
     {
-        // return [
-        //     'fullName' => ['sometimes', 'required', 'string', 'max:255'],
-        //     'gender' => ['sometimes', 'required', 'in:male,female'],
-        //     'dateOfBirth' => ['sometimes', 'required', 'date', 'before_or_equal:today'],
-        //     'phoneNumber' => ['nullable', 'string', 'max:30'],
-        //     'screeningCategory' => ['sometimes', 'required', 'in:new_client,follow_up'],
-        //     'state' => ['nullable', 'string', 'max:255'],
-        //     'lga' => ['nullable', 'string', 'max:255'],
-        //     'residence' => ['nullable', 'string', 'max:255'],
-        //     'registrationDate' => ['sometimes', 'required', 'date'],
-        // ];
-
         return [
             'fullName' => ['sometimes', 'required', 'string', 'max:255'],
             'nin' => ['nullable', 'string', 'max:255'],
@@ -40,6 +28,9 @@ class UpdateClientRequest extends FormRequest
             'address' => ['nullable', 'string', 'max:300'],
             'landmark' => ['nullable', 'string', 'max:300'],
             'occupation' => ['nullable', 'string', 'max:255'],
+            'religion' => ['nullable', 'in:islam,christianity,traditional,other'],
+            'religionOther' => ['nullable', 'string', 'max:100'],
+            'maritalStatus' => ['nullable', 'in:single,married,divorced,separated'],
             'nextOfKinName' => ['nullable', 'string', 'max:255'],
             'nextOfKinPhone' => ['nullable', 'string', 'max:30'],
             'nextOfKinRelationship' => ['nullable', 'string', 'max:100'],

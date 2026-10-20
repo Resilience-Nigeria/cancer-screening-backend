@@ -62,6 +62,15 @@ class ClientRiskProfile extends Model
         'prevCervicalTestHpv', 'prevCervicalTestVia', 'prevCervicalTestPap',
         'prevCervicalTestColposcopy', 'prevCervicalTestOther', 'prevCervicalTestOtherDetail',
         'prevCervicalResult', 'prevCervicalTreated', 'prevCervicalTreatmentType',
+
+        'previousMarriage',
+'numberOfPreviousMarriages',
+'numberOfSexualPartners',
+'moreThanOnePartner',
+'ageAtFirstIntercourse',
+'numberOfChildbirths',
+'contraceptiveUse',
+'avgBreastfeedingMonthsPerChild',
     ];
 
     protected $casts = [
@@ -82,6 +91,13 @@ class ClientRiskProfile extends Model
         'prevCervicalTestPap' => 'boolean',
         'prevCervicalTestColposcopy' => 'boolean',
         'prevCervicalTestOther' => 'boolean',
+
+        'breastfeedingDuration' => 'float',          // was probably 'integer'; 7.5 would be saved as 7
+'avgBreastfeedingMonthsPerChild' => 'float',
+'numberOfChildbirths' => 'integer',
+'ageAtFirstIntercourse' => 'integer',
+'numberOfPreviousMarriages' => 'integer',
+'numberOfSexualPartners' => 'integer',
     ];
 
     public function uniqueIds()

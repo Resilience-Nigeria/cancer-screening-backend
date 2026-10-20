@@ -27,6 +27,11 @@ class UpsertRiskProfileRequest extends FormRequest
             'weightKg',
             'heightCm',
             'breastfeedingDuration',
+            'avgBreastfeedingMonthsPerChild',
+            'numberOfChildbirths',
+            'ageAtFirstIntercourse',
+            'numberOfPreviousMarriages',
+            'numberOfSexualPartners',
         ];
 
         $normalized = [];
@@ -60,10 +65,25 @@ class UpsertRiskProfileRequest extends FormRequest
             'comorbiditiesJson.*' => ['string'],
             'ageAtFirstMenstruation' => ['nullable', 'integer', 'min:0', 'max:100'],
             'ageAtMenopause' => ['nullable', 'integer', 'min:0', 'max:100'],
+
+            // Breastfeeding: cumulative duration = children x average months per child, so it can
+            // be fractional (was integer). The UI calculates it; the average is stored alongside.
             'breastfeedingHistory' => ['nullable', 'in:yes,no'],
-            'breastfeedingDuration' => ['nullable', 'integer', 'min:0', 'max:1200'],
+            'avgBreastfeedingMonthsPerChild' => ['nullable', 'numeric', 'min:0', 'max:60'],
+            'breastfeedingDuration' => ['nullable', 'numeric', 'min:0', 'max:3000'],
+
             // Legacy: no longer collected by the UI, kept so older records/clients still validate.
             'previousBreastSurgery' => ['nullable', 'in:yes,no'],
+
+            // Sexual & reproductive history (cervical risk assessment; moved here from the
+            // cervical screening step). numberOfChildbirths is shared with the breast section.
+            'previousMarriage' => ['nullable', 'in:yes,no'],
+            'numberOfPreviousMarriages' => ['nullable', 'integer', 'min:0', 'max:50'],
+            'numberOfSexualPartners' => ['nullable', 'integer', 'min:0', 'max:1000'],
+            'moreThanOnePartner' => ['nullable', 'in:yes,no'],
+            'ageAtFirstIntercourse' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'numberOfChildbirths' => ['nullable', 'integer', 'min:0', 'max:50'],
+            'contraceptiveUse' => ['nullable', 'in:none,oral_contraceptives,iud,barrier_methods,other'],
 
             // Stage 2, Section C — medical history confirm checklist
             'previousCancer' => ['nullable', 'in:yes,no,unknown'],
