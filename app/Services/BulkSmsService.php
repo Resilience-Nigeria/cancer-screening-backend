@@ -83,7 +83,7 @@ class BulkSmsService
                     'from' => $this->senderId,
                     'to' => $to,
                     'body' => $message,
-                    'gateway' => 'corporate',
+                    'gateway' => 'international',
                 ]);
 
             $body = $response->json();
