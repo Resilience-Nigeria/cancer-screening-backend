@@ -11,6 +11,15 @@ class StoreClientRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        foreach (['phoneNotClients', 'otpSkipped'] as $bool) {
+            if ($this->has($bool)) {
+                $this->merge([$bool => filter_var($this->input($bool), FILTER_VALIDATE_BOOLEAN)]);
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -18,6 +27,11 @@ class StoreClientRequest extends FormRequest
             'gender' => ['required', 'in:male,female'],
             'dateOfBirth' => ['required', 'date', 'before_or_equal:today'],
             'phoneNumber' => ['required', 'string', 'max:30'],
+            'phoneNotClients' => ['nullable', 'boolean'],
+            'caregiverName' => ['nullable', 'string', 'max:255'],
+            'caregiverPhoneNumber' => ['nullable', 'string', 'max:30'],
+            'otpSkipped' => ['nullable', 'boolean'],
+            'otpSkipReason' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'nin' => ['nullable', 'string', 'max:30'],
             'screeningCategory' => ['required', 'in:new_client,follow_up'],

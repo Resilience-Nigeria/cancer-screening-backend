@@ -79,7 +79,11 @@ class ClientController extends Controller
         $user = auth('api')->user();
         $facilityId = $user->facilityId;
 
-        $client = DB::transaction(function () use ($request, $facilityId) {
+        // Caregiver / OTP-skip fields are read straight from the request, so they are saved even
+        // when StoreClientRequest has no rules for them and Client::$fillable doesn't list them.
+        $extra = $this->caregiverAndOtpFields($request);
+
+        $client = DB::transaction(function () use ($request, $facilityId, $extra) {
             $validated = $request->validated();
             
             // Get facility for code
@@ -97,6 +101,9 @@ class ClientController extends Controller
                 'clientId' => $clientId,
                 'facilityId' => $facilityId,
             ]);
+
+            // forceFill bypasses $fillable, so this works before the model is updated.
+            $client->forceFill($extra)->save();
 
             return $client->load('facility');
         });
@@ -144,10 +151,47 @@ class ClientController extends Controller
 
         $client->update($request->validated());
 
+        if ($request->has('phoneNotClients')) {
+            $extra = $this->caregiverAndOtpFields($request);
+            $client->forceFill([
+                'phoneNotClients' => $extra['phoneNotClients'],
+                'caregiverName' => $extra['caregiverName'],
+                'caregiverPhoneNumber' => $extra['caregiverPhoneNumber'],
+            ])->save();
+        }
+
         return response()->json([
             'message' => 'Client updated successfully',
             'client' => $client->fresh('facility'),
         ]);
+    }
+
+    /**
+     * Validates and normalises the caregiver-phone and OTP-skip fields sent by the registration form.
+     * The caregiver name is kept only when the supplied number is the caregiver's, and the skip
+     * reason / user are kept only when the OTP was actually skipped.
+     */
+    protected function caregiverAndOtpFields(Request $request): array
+    {
+        $data = $request->validate([
+            'phoneNotClients' => ['sometimes', 'nullable', 'boolean'],
+            'caregiverName'   => ['sometimes', 'nullable', 'string', 'max:255'],
+            'caregiverPhoneNumber' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'otpSkipped'      => ['sometimes', 'nullable', 'boolean'],
+            'otpSkipReason'   => ['sometimes', 'nullable', 'string', 'max:255'],
+        ]);
+
+        $notClients = (bool) ($data['phoneNotClients'] ?? false);
+        $skipped = (bool) ($data['otpSkipped'] ?? false);
+
+        return [
+            'phoneNotClients' => $notClients,
+            'caregiverName'   => ($data['caregiverName'] ?? null) ?: null,
+            'caregiverPhoneNumber' => ($data['caregiverPhoneNumber'] ?? null) ?: null,
+            'otpSkipped'      => $skipped,
+            'otpSkipReason'   => $skipped ? ($data['otpSkipReason'] ?? null) : null,
+            'otpSkippedBy'    => $skipped ? auth('api')->id() : null,
+        ];
     }
 
     protected function authorizeClient(Client $client): void
@@ -218,9 +262,10 @@ class ClientController extends Controller
 {
     $search = trim($request->search);
 
-    $client = Client::where('clientId', $search)
-        ->orWhere('phoneNumber', $search)
-        ->first();
+    // Exact Client ID wins. A caregiver's number can be shared by several clients, so for a phone
+    // search prefer the client who actually owns the number (phoneNotClients = false) first.
+    $client = Client::where('clientId', $search)->first()
+        ?? Client::where('phoneNumber', $search)->orderBy('phoneNotClients')->first();
 
     if (!$client) {
         return response()->json([
@@ -246,7 +291,10 @@ public function checkDuplicate(Request $request): JsonResponse
     $matches = [];
 
     if ($phone) {
-        $byPhone = Client::where('phoneNumber', $phone)->first();
+        // Records whose number is a caregiver's are not duplicates of someone using that number as their own.
+        $byPhone = Client::where('phoneNumber', $phone)
+            ->where('phoneNotClients', false)
+            ->first();
         if ($byPhone) {
             $matches[] = ['field' => 'phone', 'client' => $byPhone];
         }

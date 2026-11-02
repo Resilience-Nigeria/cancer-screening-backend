@@ -19,6 +19,8 @@ class CervicalScreening extends Model
         'screeningResult',
         'hpvResult',
         'hpvGenotype',
+        'hpvSampleDate',
+        'hpvResultDate',
         'colposcopyDone',
         'biopsyDone',
         'biopsyResult',
@@ -66,6 +68,8 @@ class CervicalScreening extends Model
 
     protected $casts = [
         'screeningDate' => 'date',
+        'hpvSampleDate' => 'date:Y-m-d',
+        'hpvResultDate' => 'date:Y-m-d',
         'colposcopyDone' => 'boolean',
         'biopsyDone' => 'boolean',
         'hpvBookNow' => 'boolean',

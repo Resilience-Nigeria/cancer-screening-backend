@@ -25,6 +25,12 @@ protected $keyType = 'string';
         'dateOfBirth',
         'age',
         'phoneNumber',
+        'phoneNotClients',
+        'caregiverName',
+        'caregiverPhoneNumber',
+        'otpSkipped',
+        'otpSkipReason',
+        'otpSkippedBy',
         'email',
         'screeningCategory',
         'stateOfOrigin',
@@ -49,6 +55,8 @@ protected $keyType = 'string';
     protected $casts = [
         'dateOfBirth' => 'date',
         'registrationDate' => 'date',
+        'phoneNotClients' => 'boolean',
+        'otpSkipped' => 'boolean',
     ];
 
     protected $appends = ['age'];
