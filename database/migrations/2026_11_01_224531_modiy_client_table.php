@@ -11,22 +11,22 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::table('clients', function (Blueprint $table) {
-            $table->boolean('phoneNotClients')->default(false);
-            $table->string('caregiverName')->nullable();
-            $table->boolean('otpSkipped')->default(false);
-            $table->string('otpSkipReason')->nullable();
-            $table->unsignedBigInteger('otpSkippedBy')->nullable();
-        });
+        // Schema::table('clients', function (Blueprint $table) {
+        //     $table->boolean('phoneNotClients')->default(false);
+        //     $table->string('caregiverName')->nullable();
+        //     $table->boolean('otpSkipped')->default(false);
+        //     $table->string('otpSkipReason')->nullable();
+        //     $table->unsignedBigInteger('otpSkippedBy')->nullable();
+        // });
 
-        if (!Schema::hasTable($this->cervicalTable)) {
-            throw new RuntimeException("Table {$this->cervicalTable} not found. Set \$cervicalTable to your cervical screening table.");
-        }
+        // if (!Schema::hasTable($this->cervicalTable)) {
+        //     throw new RuntimeException("Table {$this->cervicalTable} not found. Set \$cervicalTable to your cervical screening table.");
+        // }
 
-        Schema::table($this->cervicalTable, function (Blueprint $table) {
-            $table->date('hpvSampleDate')->nullable();
-            $table->date('hpvResultDate')->nullable();
-        });
+        // Schema::table($this->cervicalTable, function (Blueprint $table) {
+        //     $table->date('hpvSampleDate')->nullable();
+        //     $table->date('hpvResultDate')->nullable();
+        // });
     }
 
     public function down(): void
