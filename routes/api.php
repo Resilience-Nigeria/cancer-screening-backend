@@ -25,6 +25,12 @@ use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Http\Controllers\Api\OtpController;
 use App\Http\Controllers\Api\NavigatorClientsController;
 use App\Http\Controllers\Api\QrCodeController;
+
+use App\Http\Controllers\Api\HpvSampleController;
+
+use App\Http\Controllers\Api\ScreeningSampleController;
+
+
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -129,6 +135,16 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 Route::post('/clients/{client}/referrals', [ClientReferralController::class, 'store']);
 Route::get('/referrals', [ClientReferralController::class, 'index']);
 Route::patch('/referrals/{referral}/status', [ClientReferralController::class, 'updateStatus']);
+
+
+Route::get('/hpv-samples', [HpvSampleController::class, 'index']);
+Route::post('/clients/{clientId}/hpv-samples', [HpvSampleController::class, 'store']);
+Route::patch('/hpv-samples/{id}/result', [HpvSampleController::class, 'recordResult']);
+
+Route::get('/screening-samples', [ScreeningSampleController::class, 'index']);
+Route::post('/clients/{clientId}/screening-samples', [ScreeningSampleController::class, 'store']);
+Route::patch('/screening-samples/{id}/result', [ScreeningSampleController::class, 'recordResult']);
+
 
     Route::get('/users/organizations', [UserController::class, 'getOrganizations']);
     
