@@ -122,7 +122,7 @@ class AuthController extends Controller
             'message'      => 'Logged in successfully',
             'access_token' => $accessToken,
             'token_type'   => 'bearer',
-            'expires_in'   => Auth::guard('api')->factory()->getTTL() * 60,
+            'expires_in'   => Auth::guard('api')->factory()->getTTL() * 120,
             'user'         => $userData,
         ])
         ->cookie('access_token',  $accessToken,  60 * 24 * 2,   null, null, true, true, false, 'lax')
