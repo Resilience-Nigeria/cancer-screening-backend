@@ -48,6 +48,64 @@ class ScreeningSampleController extends Controller
         return response()->json(['samples' => $query->limit(200)->get()]);
     }
 
+    /**
+     * GET /screening-samples/results
+     * All released results with filters, paging and severity totals.
+     * ?cancerType= &testType= &severity= &dateFrom= &dateTo= &clientId= &search= &page= &perPage=
+     */
+    public function results(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+        $visible = $user->visibleFacilityIds();
+        $search = trim((string) $request->query('search', ''));
+
+        $base = ScreeningSample::query()
+            ->where('status', 'result_released')
+            ->when($visible !== null, fn ($q) => $q->whereIn('facilityId', $visible))
+            ->when($request->query('cancerType'), fn ($q, $v) => $q->where('cancerType', $v))
+            ->when($request->query('testType'), fn ($q, $v) => $q->where('testType', $v))
+            ->when($request->query('clientId'), fn ($q, $v) => $q->where('clientId', $v))
+            ->when($request->query('dateFrom'), fn ($q, $v) => $q->whereDate('resultDate', '>=', $v))
+            ->when($request->query('dateTo'), fn ($q, $v) => $q->whereDate('resultDate', '<=', $v))
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('clientId', 'like', "%{$search}%")
+                        ->orWhere('labSampleNumber', 'like', "%{$search}%")
+                        ->orWhereHas('client', function ($c) use ($search) {
+                            $c->where('fullName', 'like', "%{$search}%")
+                              ->orWhere('phoneNumber', 'like', "%{$search}%");
+                        });
+                });
+            });
+
+        // Totals ignore the severity filter so the summary tiles stay clickable filters.
+        $summary = (clone $base)
+            ->selectRaw('resultSeverity, COUNT(*) as n')
+            ->groupBy('resultSeverity')
+            ->pluck('n', 'resultSeverity');
+
+        $rows = (clone $base)
+            ->when($request->query('severity'), fn ($q, $v) => $q->where('resultSeverity', $v))
+            ->with(self::WITH_CLIENT)
+            ->orderByDesc('resultDate')
+            ->orderByDesc('sampleId')
+            ->paginate(min((int) $request->query('perPage', 20), 500));
+
+        return response()->json([
+            'results' => $rows->items(),
+            'total'   => $rows->total(),
+            'page'    => $rows->currentPage(),
+            'perPage' => $rows->perPage(),
+            'summary' => [
+                'total'    => (int) $summary->sum(),
+                'normal'   => (int) ($summary['normal'] ?? 0),
+                'abnormal' => (int) ($summary['abnormal'] ?? 0),
+                'urgent'   => (int) ($summary['urgent'] ?? 0),
+                'neutral'  => (int) ($summary['neutral'] ?? 0),
+            ],
+        ]);
+    }
+
     /** POST /clients/{clientId}/screening-samples — record that a sample was taken / test performed. */
     public function store(Request $request, string $clientId): JsonResponse
     {

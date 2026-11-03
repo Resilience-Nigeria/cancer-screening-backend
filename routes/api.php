@@ -144,7 +144,7 @@ Route::patch('/hpv-samples/{id}/result', [HpvSampleController::class, 'recordRes
 Route::get('/screening-samples', [ScreeningSampleController::class, 'index']);
 Route::post('/clients/{clientId}/screening-samples', [ScreeningSampleController::class, 'store']);
 Route::patch('/screening-samples/{id}/result', [ScreeningSampleController::class, 'recordResult']);
-
+Route::get('/screening-samples/results', [ScreeningSampleController::class, 'results']);
 
     Route::get('/users/organizations', [UserController::class, 'getOrganizations']);
     
