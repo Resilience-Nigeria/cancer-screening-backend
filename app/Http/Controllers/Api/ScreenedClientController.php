@@ -28,6 +28,67 @@ class ScreenedClientController extends Controller
         return array_filter(self::RELATIONS, fn ($rel) => method_exists($visit, $rel));
     }
 
+
+    private const SUSPICIOUS_OUTCOMES = ['suspicious', 'urgent_referral'];
+
+    /** Finding for one screening record: its own result, else the HPV result, else the visit's overall outcome. */
+    private function findingFor($rec, $visit): ?string
+    {
+        if (!empty($rec->screeningResult)) return $rec->screeningResult;
+
+        $hpv = strtolower((string) ($rec->hpvResult ?? ''));
+        if ($hpv !== '') {
+            if (str_contains($hpv, 'pos')) return 'suspicious';
+            if (str_contains($hpv, 'neg')) return 'non_suspicious';
+        }
+        $o = (string) ($visit->overallOutcome ?? '');
+        if ($o === '') return null;
+        return in_array($o, self::SUSPICIOUS_OUTCOMES, true) ? 'suspicious' : 'non_suspicious';
+    }
+
+    /**
+     * Visit matches the cancer-type / finding / date filters. Where a screening row has no result or date of its own,
+     * the visit's overall outcome and visit date are used, the same way the list displays them.
+     */
+    private function matchVisit($v, array $use, array $f): void
+    {
+        $v->where(function ($w) use ($use, $f) {
+            foreach ($use as $rel) {
+                $w->orWhere(function ($x) use ($rel, $f) {
+                    $x->whereHas($rel);
+
+                    if (!empty($f['result'])) {
+                        $x->where(function ($r) use ($rel, $f) {
+                            $r->whereHas($rel, fn ($m) => $m->where('screeningResult', $f['result']))
+                              ->orWhere(function ($y) use ($rel, $f) {
+                                  $y->whereHas($rel, fn ($m) => $m->whereNull('screeningResult'));
+                                  if ($f['result'] === 'suspicious') {
+                                      $y->whereIn('overallOutcome', self::SUSPICIOUS_OUTCOMES);
+                                  } else {
+                                      $y->whereNotNull('overallOutcome')->whereNotIn('overallOutcome', self::SUSPICIOUS_OUTCOMES);
+                                  }
+                              });
+                        });
+                    }
+
+                    if (!empty($f['dateFrom']) || !empty($f['dateTo'])) {
+                        $x->where(function ($d) use ($rel, $f) {
+                            $d->whereHas($rel, function ($m) use ($f) {
+                                  if (!empty($f['dateFrom'])) $m->whereDate('screeningDate', '>=', $f['dateFrom']);
+                                  if (!empty($f['dateTo']))   $m->whereDate('screeningDate', '<=', $f['dateTo']);
+                              })
+                              ->orWhere(function ($y) use ($rel, $f) {
+                                  $y->whereHas($rel, fn ($m) => $m->whereNull('screeningDate'));
+                                  if (!empty($f['dateFrom'])) $y->whereDate('visitDate', '>=', $f['dateFrom']);
+                                  if (!empty($f['dateTo']))   $y->whereDate('visitDate', '<=', $f['dateTo']);
+                              });
+                        });
+                    }
+                });
+            }
+        });
+    }
+
     /** Clients with at least one saved screening, limited to the user's facilities. */
     private function screenedQuery(?array $visible, array $rels, array $f = [])
     {
@@ -40,19 +101,22 @@ class ScreenedClientController extends Controller
             return $q->whereRaw('1 = 0');
         }
 
-        return $q->whereHas('visits', function ($v) use ($use, $f) {
-            if (!empty($f['facilityId'])) {
-                $v->where('facilityId', $f['facilityId']);   // screened at this facility
-            }
-            $v->where(function ($w) use ($use, $f) {
-                foreach ($use as $rel) {
-                    $w->orWhereHas($rel, function ($m) use ($f) {
-                        if (!empty($f['result']))   $m->where('screeningResult', $f['result']);
-                        if (!empty($f['dateFrom'])) $m->whereDate('screeningDate', '>=', $f['dateFrom']);
-                        if (!empty($f['dateTo']))   $m->whereDate('screeningDate', '<=', $f['dateTo']);
-                    });
+        $hasScreeningFilter = !empty($f['result']) || !empty($f['dateFrom']) || !empty($f['dateTo']) || !empty($f['facilityId']);
+
+        return $q->where(function ($outer) use ($use, $f, $visible, $hasScreeningFilter) {
+            $outer->whereHas('visits', function ($v) use ($use, $f) {
+                if (!empty($f['facilityId'])) {
+                    $v->where('facilityId', $f['facilityId']);   // screened at this facility
                 }
+                $this->matchVisit($v, $use, $f);
             });
+
+            // A client with a lab test counts as screened even if the findings row is not saved yet.
+            if (!$hasScreeningFilter) {
+                $outer->orWhereIn('clientId', ScreeningSample::query()->select('clientId')
+                    ->when($visible !== null, fn ($x) => $x->whereIn('facilityId', $visible))
+                    ->when(!empty($f['cancerType']), fn ($x) => $x->where('cancerType', $f['cancerType'])));
+            }
         });
     }
 
@@ -67,15 +131,7 @@ class ScreenedClientController extends Controller
             return $q->whereRaw('1 = 0');
         }
 
-        $q->where(function ($w) use ($use, $f) {
-            foreach ($use as $rel) {
-                $w->orWhereHas($rel, function ($m) use ($f) {
-                    if (!empty($f['result']))   $m->where('screeningResult', $f['result']);
-                    if (!empty($f['dateFrom'])) $m->whereDate('screeningDate', '>=', $f['dateFrom']);
-                    if (!empty($f['dateTo']))   $m->whereDate('screeningDate', '<=', $f['dateTo']);
-                });
-            }
-        });
+        $this->matchVisit($q, $use, $f);
 
         if (!empty($f['facilityId'])) {
             $q->where('facilityId', $f['facilityId']);
@@ -238,7 +294,14 @@ class ScreenedClientController extends Controller
             ->paginate(min((int) $request->query('perPage', 20), 100));
 
         $ids = collect($page->items())->pluck('clientId');
-        $samples = ScreeningSample::whereIn('clientId', $ids)->get()->groupBy('clientId');
+        $visitToClient = collect($page->items())->flatMap(fn ($c) => $c->visits->mapWithKeys(fn ($v) => [$v->visitId => $c->clientId]));
+        $samples = ScreeningSample::query()
+            ->where(function ($q) use ($ids, $visitToClient) {
+                $q->whereIn('clientId', $ids);
+                if ($visitToClient->isNotEmpty()) $q->orWhereIn('visitId', $visitToClient->keys());
+            })
+            ->orderByDesc('sampleId')->get()
+            ->groupBy(fn ($sm) => $visitToClient[$sm->visitId] ?? $sm->clientId);
 
         $items = collect($page->items());
         $facilityMap = Facility::whereIn('facilityId', $items->flatMap(fn ($c) => $c->visits->pluck('facilityId')->push($c->facilityId))->filter()->unique())
@@ -252,16 +315,17 @@ class ScreenedClientController extends Controller
                 foreach ($c->visits as $visit) {
                     $rec = $visit->{$rel};
                     if (!$rec) continue;
-                    $d = $rec->screeningDate ? (string) $rec->screeningDate : '';
+                    $raw = $rec->screeningDate ?: $visit->visitDate;
+                    $d = $raw ? substr((string) $raw, 0, 10) : '';
                     if (!$best || $d >= $best['d']) {
-                        $best = ['d' => $d, 'rec' => $rec];
+                        $best = ['d' => $d, 'rec' => $rec, 'visit' => $visit];
                     }
                 }
                 if ($best) {
                     $latest[] = [
                         'cancerType'      => $type,
-                        'screeningDate'   => $best['d'] ? substr($best['d'], 0, 10) : null,
-                        'screeningResult' => $best['rec']->screeningResult,
+                        'screeningDate'   => $best['d'] ?: null,
+                        'screeningResult' => $this->findingFor($best['rec'], $best['visit']),
                     ];
                 }
             }
@@ -295,6 +359,14 @@ class ScreenedClientController extends Controller
                 'otherScreeners' => max($screenerIds->count() - 1, 0),
                 'lastScreeningDate' => $dates->last(),
                 'screenings'     => $latest,
+                'tests' => $mine->take(4)->map(fn ($sm) => [
+                    'testType'   => $sm->testType,
+                    'cancerType' => $sm->cancerType,
+                    'status'     => $sm->status,
+                    'result'     => $sm->result,
+                    'severity'   => $sm->resultSeverity,
+                    'date'       => $sm->resultDate ? substr((string) $sm->resultDate, 0, 10) : ($sm->sampleDate ? substr((string) $sm->sampleDate, 0, 10) : null),
+                ])->values(),
                 'labs' => [
                     'pending'  => $mine->where('status', 'collected')->count(),
                     'released' => $mine->where('status', 'result_released')->count(),
@@ -308,6 +380,7 @@ class ScreenedClientController extends Controller
         $scope = fn ($q) => $q->when($visible !== null, fn ($x) => $x->whereIn('facilityId', $visible));
 
         return response()->json([
+            'version' => 'screened-clients-v5',
             'clients' => $rows,
             'total'   => $page->total(),
             'page'    => $page->currentPage(),
