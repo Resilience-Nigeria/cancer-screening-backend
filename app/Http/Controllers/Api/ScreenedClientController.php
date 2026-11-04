@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\Facility;
 use App\Models\ScreeningSample;
 use App\Models\ScreeningVisit;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -39,6 +41,9 @@ class ScreenedClientController extends Controller
         }
 
         return $q->whereHas('visits', function ($v) use ($use, $f) {
+            if (!empty($f['facilityId'])) {
+                $v->where('facilityId', $f['facilityId']);   // screened at this facility
+            }
             $v->where(function ($w) use ($use, $f) {
                 foreach ($use as $rel) {
                     $w->orWhereHas($rel, function ($m) use ($f) {
@@ -51,6 +56,152 @@ class ScreenedClientController extends Controller
         });
     }
 
+    /** Visits (one row per visit) that match the same filters, for the per-facility analytics. */
+    private function visitQuery(?array $visible, array $rels, array $f, string $search, ?string $lab)
+    {
+        $cancer = $f['cancerType'] ?? null;
+        $use = $cancer ? array_intersect_key($rels, [$cancer => 1]) : $rels;
+
+        $q = ScreeningVisit::query()->when($visible !== null, fn ($v) => $v->whereIn('facilityId', $visible));
+        if (!$use) {
+            return $q->whereRaw('1 = 0');
+        }
+
+        $q->where(function ($w) use ($use, $f) {
+            foreach ($use as $rel) {
+                $w->orWhereHas($rel, function ($m) use ($f) {
+                    if (!empty($f['result']))   $m->where('screeningResult', $f['result']);
+                    if (!empty($f['dateFrom'])) $m->whereDate('screeningDate', '>=', $f['dateFrom']);
+                    if (!empty($f['dateTo']))   $m->whereDate('screeningDate', '<=', $f['dateTo']);
+                });
+            }
+        });
+
+        if (!empty($f['facilityId'])) {
+            $q->where('facilityId', $f['facilityId']);
+        }
+        if ($search !== '') {
+            $q->whereHas('client', fn ($c) => $c->where('clientId', 'like', "%{$search}%")
+                ->orWhere('fullName', 'like', "%{$search}%")
+                ->orWhere('phoneNumber', 'like', "%{$search}%")
+                ->orWhere('hospitalNumber', 'like', "%{$search}%"));
+        }
+        if ($lab) {
+            $q->whereIn('clientId', $this->labClients($lab));
+        }
+        return $q;
+    }
+
+    private function labClients(string $lab)
+    {
+        $labQuery = ScreeningSample::query()->select('clientId');
+        if ($lab === 'pending') {
+            $labQuery->where('status', 'collected');
+        } elseif ($lab === 'urgent') {
+            $labQuery->where('status', 'result_released')->where('resultSeverity', 'urgent');
+        } elseif ($lab === 'abnormal') {
+            $labQuery->where('status', 'result_released')->whereIn('resultSeverity', ['abnormal', 'urgent']);
+        }
+        return $labQuery;
+    }
+
+
+    /** Navigators only ever see their own facility; everyone else keeps their normal scope. */
+    private function scopeFor($user): ?array
+    {
+        $visible = $user->visibleFacilityIds();
+
+        $role = strtolower((string) (
+            is_string($user->role ?? null) ? $user->role
+            : ($user->role->name ?? $user->roleName ?? $user->userRole ?? '')
+        ));
+        $isNavigator = str_contains($role, 'navigator')
+            || (method_exists($user, 'hasRole') && rescue(fn () => $user->hasRole('navigator'), false, false));
+
+        if ($isNavigator && !empty($user->facilityId)) {
+            return [$user->facilityId];
+        }
+        return $visible;
+    }
+
+    private function userName($u): string
+    {
+        $name = $u->fullName ?? $u->name ?? null;
+        if (!$name) {
+            $name = trim(($u->firstName ?? '') . ' ' . ($u->lastName ?? ''));
+        }
+        return $name ?: ($u->email ?? 'Unknown user');
+    }
+
+    /** id => display name for the users who created these visits. */
+    private function userNames($ids): array
+    {
+        $ids = collect($ids)->filter()->unique()->values();
+        if ($ids->isEmpty()) return [];
+        $model = new User();
+        return User::whereIn($model->getKeyName(), $ids)->get()
+            ->mapWithKeys(fn ($u) => [$u->getKey() => $this->userName($u)])->all();
+    }
+
+    /** Clients, visits and suspicious clients per person who did the screening. */
+    private function screenerAnalytics(?array $visible, array $rels, array $f, string $search, ?string $lab): array
+    {
+        $f = array_diff_key($f, ['facilityId' => 1]);
+        $totals = $this->visitQuery($visible, $rels, $f, $search, $lab)
+            ->selectRaw('createdBy, COUNT(DISTINCT clientId) as clients, COUNT(*) as visits')
+            ->groupBy('createdBy')->get();
+
+        $suspicious = $this->visitQuery($visible, $rels, array_merge($f, ['result' => 'suspicious']), $search, $lab)
+            ->selectRaw('createdBy, COUNT(DISTINCT clientId) as n')
+            ->groupBy('createdBy')->pluck('n', 'createdBy');
+
+        $names = $this->userNames($totals->pluck('createdBy'));
+
+        return $totals->map(function ($r) use ($names, $suspicious) {
+            $clients = (int) $r->clients;
+            $susp = (int) ($suspicious[$r->createdBy] ?? 0);
+            return [
+                'userId'         => $r->createdBy,
+                'name'           => $r->createdBy ? ($names[$r->createdBy] ?? 'Unknown user') : 'Not recorded',
+                'clients'        => $clients,
+                'visits'         => (int) $r->visits,
+                'suspicious'     => $susp,
+                'suspiciousRate' => $clients ? round($susp / $clients * 100, 1) : 0,
+            ];
+        })->sortByDesc('clients')->values()->all();
+    }
+
+    /** Clients screened, visits and suspicious clients per screening facility. */
+    private function facilityAnalytics(?array $visible, array $rels, array $f, string $search, ?string $lab): array
+    {
+        $totals = $this->visitQuery($visible, $rels, $f, $search, $lab)
+            ->selectRaw('facilityId, COUNT(DISTINCT clientId) as clients, COUNT(*) as visits')
+            ->groupBy('facilityId')
+            ->get()
+            ->keyBy('facilityId');
+
+        $suspicious = $this->visitQuery($visible, $rels, array_merge($f, ['result' => 'suspicious']), $search, $lab)
+            ->selectRaw('facilityId, COUNT(DISTINCT clientId) as n')
+            ->groupBy('facilityId')
+            ->pluck('n', 'facilityId');
+
+        $names = Facility::whereIn('facilityId', $totals->keys())->get(['facilityId', 'facilityName', 'facilityState'])->keyBy('facilityId');
+
+        return $totals->map(function ($row, $fid) use ($names, $suspicious) {
+            $clients = (int) $row->clients;
+            $susp = (int) ($suspicious[$fid] ?? 0);
+            return [
+                'facilityId'     => $fid,
+                'facilityName'   => $names[$fid]->facilityName ?? 'Unknown facility',
+                'facilityState'  => $names[$fid]->facilityState ?? null,
+                'clients'        => $clients,
+                'visits'         => (int) $row->visits,
+                'suspicious'     => $susp,
+                'suspiciousRate' => $clients ? round($susp / $clients * 100, 1) : 0,
+            ];
+        })->sortByDesc('clients')->values()->all();
+    }
+
     /**
      * GET /screened-clients
      * ?search= &cancerType= &result=suspicious|non_suspicious &lab=pending|abnormal|urgent
@@ -59,11 +210,11 @@ class ScreenedClientController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = auth('api')->user();
-        $visible = $user->visibleFacilityIds();
+        $visible = $this->scopeFor($user);
         $rels = $this->relations();
         $search = trim((string) $request->query('search', ''));
 
-        $filters = $request->only(['cancerType', 'result', 'dateFrom', 'dateTo']);
+        $filters = $request->only(['cancerType', 'result', 'dateFrom', 'dateTo', 'facilityId']);
         $query = $this->screenedQuery($visible, $rels, $filters);
 
         if ($search !== '') {
@@ -75,16 +226,9 @@ class ScreenedClientController extends Controller
             });
         }
 
-        if ($lab = $request->query('lab')) {
-            $labQuery = ScreeningSample::query()->select('clientId');
-            if ($lab === 'pending') {
-                $labQuery->where('status', 'collected');
-            } elseif ($lab === 'urgent') {
-                $labQuery->where('status', 'result_released')->where('resultSeverity', 'urgent');
-            } elseif ($lab === 'abnormal') {
-                $labQuery->where('status', 'result_released')->whereIn('resultSeverity', ['abnormal', 'urgent']);
-            }
-            $query->whereIn('clientId', $labQuery);
+        $lab = $request->query('lab');
+        if ($lab) {
+            $query->whereIn('clientId', $this->labClients($lab));
         }
 
         $page = $query
@@ -96,7 +240,12 @@ class ScreenedClientController extends Controller
         $ids = collect($page->items())->pluck('clientId');
         $samples = ScreeningSample::whereIn('clientId', $ids)->get()->groupBy('clientId');
 
-        $rows = collect($page->items())->map(function (Client $c) use ($rels, $samples) {
+        $items = collect($page->items());
+        $facilityMap = Facility::whereIn('facilityId', $items->flatMap(fn ($c) => $c->visits->pluck('facilityId')->push($c->facilityId))->filter()->unique())
+            ->get(['facilityId', 'facilityName', 'facilityState'])->keyBy('facilityId');
+        $userMap = $this->userNames($items->flatMap(fn ($c) => $c->visits->pluck('createdBy')));
+
+        $rows = collect($page->items())->map(function (Client $c) use ($rels, $samples, $facilityMap, $userMap) {
             $latest = [];
             foreach ($rels as $type => $rel) {
                 $best = null;
@@ -117,6 +266,14 @@ class ScreenedClientController extends Controller
                 }
             }
 
+            // Where and by whom: the most recent visit, plus how many others.
+            $latestVisit = $c->visits->sortByDesc('visitId')->first();
+            $facIds = $c->visits->pluck('facilityId')->filter()->unique();
+            $fid = $latestVisit?->facilityId ?: $c->facilityId;
+            $fac = $fid ? ($facilityMap[$fid] ?? null) : null;
+            $screenerIds = $c->visits->pluck('createdBy')->filter()->unique();
+            $screenerId = $latestVisit?->createdBy;
+
             $mine = $samples->get($c->clientId, collect());
             $dates = collect($latest)->pluck('screeningDate')->filter()->sort()->values();
 
@@ -128,6 +285,14 @@ class ScreenedClientController extends Controller
                 'phoneNumber'    => $c->phoneNumber,
                 'hospitalNumber' => $c->hospitalNumber,
                 'visitCount'     => $c->visits->count(),
+                'screenedAt'     => $fac ? [
+                    'facilityId'    => $fac->facilityId,
+                    'facilityName'  => $fac->facilityName,
+                    'facilityState' => $fac->facilityState ?? null,
+                ] : null,
+                'otherFacilities' => max($facIds->count() - 1, 0),
+                'screenedBy'     => $screenerId ? ($userMap[$screenerId] ?? 'Unknown user') : null,
+                'otherScreeners' => max($screenerIds->count() - 1, 0),
                 'lastScreeningDate' => $dates->last(),
                 'screenings'     => $latest,
                 'labs' => [
@@ -147,6 +312,10 @@ class ScreenedClientController extends Controller
             'total'   => $page->total(),
             'page'    => $page->currentPage(),
             'perPage' => $page->perPage(),
+            // Ignore the facility filter here so all facilities stay visible for comparison.
+            'scope' => ($visible !== null && count($visible) === 1) ? 'facility' : 'multi',
+            'screenerAnalytics' => $this->screenerAnalytics($visible, $rels, $filters, $search, $lab),
+            'facilityAnalytics' => $this->facilityAnalytics($visible, $rels, array_diff_key($filters, ['facilityId' => 1]), $search, $lab),
             'summary' => [
                 'screened'   => (clone $all)->count(),
                 'suspicious' => $this->screenedQuery($visible, $rels, ['result' => 'suspicious'])->count(),
