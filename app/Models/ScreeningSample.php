@@ -16,16 +16,25 @@ class ScreeningSample extends Model
         'cancerType', 'testType', 'specimenType', 'collectionMethod',
         'sampleDate', 'labSampleNumber', 'collectedBy', 'collectedById', 'notes',
         'status',
-        'result', 'resultSeverity', 'resultValue', 'resultDetail', 'resultDate', 'resultNotes', 'resultEnteredById',
+        'result', 'resultSeverity', 'resultValue', 'resultDetail', 'resultMeta', 'resultAttachmentPath', 'resultAttachmentName', 'resultAttachmentMime', 'resultDate', 'resultNotes', 'resultEnteredById',
     ];
 
     protected $casts = [
         'sampleDate'  => 'date:Y-m-d',
         'resultDate'  => 'date:Y-m-d',
         'resultValue' => 'float',
+        'resultMeta'  => 'array',
     ];
 
-    protected $appends = ['sampleRef'];
+    // The storage path is internal; the browser only ever gets the file through the authenticated endpoint.
+    protected $hidden = ['resultAttachmentPath'];
+
+    protected $appends = ['sampleRef', 'hasAttachment'];
+
+    public function getHasAttachmentAttribute(): bool
+    {
+        return !empty($this->resultAttachmentPath);
+    }
 
     /** Reference to write on the sample / request form, e.g. HPV-000042, PSA-000007. */
     public function getSampleRefAttribute(): string

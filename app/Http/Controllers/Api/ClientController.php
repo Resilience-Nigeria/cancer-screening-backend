@@ -28,7 +28,8 @@ class ClientController extends Controller
         $q->where(function ($sub) use ($search) {
             $sub->where('fullName', 'like', "%{$search}%")
                 ->orWhere('phoneNumber', 'like', "%{$search}%")
-                ->orWhere('clientId', 'like', "%{$search}%");
+                ->orWhere('clientId', 'like', "%{$search}%")
+                ->orWhere('hospitalNumber', 'like', "%{$search}%");
         });
     })
     ->latest();
@@ -265,6 +266,7 @@ class ClientController extends Controller
     // Exact Client ID wins. A caregiver's number can be shared by several clients, so for a phone
     // search prefer the client who actually owns the number (phoneNotClients = false) first.
     $client = Client::where('clientId', $search)->first()
+        ?? Client::where('hospitalNumber', $search)->first()
         ?? Client::where('phoneNumber', $search)->orderBy('phoneNotClients')->first();
 
     if (!$client) {

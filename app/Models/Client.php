@@ -48,6 +48,7 @@ protected $keyType = 'string';
         'landmark',
         'registrationDate',
         'nin',
+        'hospitalNumber',
         'journeyStage',
         'linkedFacilityId',
     ];

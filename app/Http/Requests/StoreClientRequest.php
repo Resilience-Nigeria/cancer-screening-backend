@@ -34,6 +34,7 @@ class StoreClientRequest extends FormRequest
             'otpSkipReason' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'nin' => ['nullable', 'string', 'max:30'],
+            'hospitalNumber' => ['nullable', 'string', 'max:50'],
             'screeningCategory' => ['required', 'in:new_client,follow_up'],
             'stateOfOrigin' => ['required', 'string', 'max:255'],
             'lgaOfOrigin' => ['required', 'string', 'max:255'],

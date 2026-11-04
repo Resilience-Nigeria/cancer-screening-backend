@@ -62,7 +62,7 @@
    ],
    "detail": {
     "name": "hpvGenotype",
-    "label": "HPV genotype",
+    "label": "HPV genotype / group",
     "requiredFor": [
      "positive"
     ],
@@ -124,11 +124,71 @@
       "label": "68"
      },
      {
+      "value": "grp_16_18",
+      "label": "16/18 detected (Truenat group)"
+     },
+     {
+      "value": "grp_other_hr",
+      "label": "31/33/35/45/52/58 detected (Truenat group)"
+     },
+     {
+      "value": "grp_both",
+      "label": "16/18 and 31/33/35/45/52/58 detected"
+     },
+     {
       "value": "other",
       "label": "Other"
      }
     ]
-   }
+   },
+   "extraFields": [
+    {
+     "name": "assay",
+     "label": "Test platform",
+     "type": "select",
+     "options": [
+      "Truenat HPV-HR Plus",
+      "Other platform"
+     ]
+    },
+    {
+     "name": "runStatus",
+     "label": "Run status (from the machine report)",
+     "type": "select",
+     "required": true,
+     "options": [
+      "Valid",
+      "Invalid",
+      "Error"
+     ],
+     "inconclusiveWhen": [
+      "Invalid",
+      "Error"
+     ]
+    },
+    {
+     "name": "controlCt",
+     "label": "Internal control Ct value",
+     "type": "number",
+     "min": 0,
+     "max": 60
+    },
+    {
+     "name": "lotNumber",
+     "label": "Kit lot number",
+     "type": "text"
+    },
+    {
+     "name": "lotExpiry",
+     "label": "Kit expiry (MM-YY)",
+     "type": "text"
+    },
+    {
+     "name": "operator",
+     "label": "Lab operator",
+     "type": "text"
+    }
+   ]
   },
   {
    "key": "cervical_cytology",

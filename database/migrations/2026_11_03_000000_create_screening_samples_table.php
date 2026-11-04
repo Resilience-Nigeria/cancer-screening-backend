@@ -33,6 +33,10 @@ return new class extends Migration
             $table->string('resultSeverity', 10)->nullable();            // normal | abnormal | urgent | neutral
             $table->decimal('resultValue', 12, 2)->nullable();           // PSA, AFP
             $table->string('resultDetail', 40)->nullable();              // HPV genotype, ISUP grade group
+            $table->string('resultAttachmentPath')->nullable();          // optional photo / PDF of the machine printout
+            $table->string('resultAttachmentName', 200)->nullable();
+            $table->string('resultAttachmentMime', 100)->nullable();
+            $table->json('resultMeta')->nullable();                      // lab run details: platform, run status, lot, control Ct
             $table->date('resultDate')->nullable();
             $table->text('resultNotes')->nullable();
             $table->unsignedBigInteger('resultEnteredById')->nullable();

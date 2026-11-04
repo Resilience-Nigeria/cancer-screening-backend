@@ -30,6 +30,9 @@ use App\Http\Controllers\Api\HpvSampleController;
 
 use App\Http\Controllers\Api\ScreeningSampleController;
 
+use App\Http\Controllers\Api\ScreenedClientController;
+// use App\Http\Controllers\Api\ScreeningSampleController;
+
 
 use Illuminate\Support\Facades\Route;
 
@@ -145,6 +148,15 @@ Route::get('/screening-samples', [ScreeningSampleController::class, 'index']);
 Route::post('/clients/{clientId}/screening-samples', [ScreeningSampleController::class, 'store']);
 Route::patch('/screening-samples/{id}/result', [ScreeningSampleController::class, 'recordResult']);
 Route::get('/screening-samples/results', [ScreeningSampleController::class, 'results']);
+
+Route::post('/screening-samples/{id}/attachment', [ScreeningSampleController::class, 'uploadAttachment']);
+Route::get('/screening-samples/{id}/attachment', [ScreeningSampleController::class, 'attachment']);
+Route::delete('/screening-samples/{id}/attachment', [ScreeningSampleController::class, 'deleteAttachment']);
+
+
+
+Route::get('/screened-clients', [ScreenedClientController::class, 'index']);
+Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'syncFromVisit']);
 
     Route::get('/users/organizations', [UserController::class, 'getOrganizations']);
     
