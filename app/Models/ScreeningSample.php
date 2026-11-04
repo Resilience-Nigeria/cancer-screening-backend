@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Support\ScreeningTestCatalog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Facility;
 
 class ScreeningSample extends Model
 {
@@ -41,6 +42,12 @@ class ScreeningSample extends Model
     {
         $prefix = ScreeningTestCatalog::find($this->testType)['refPrefix'] ?? 'SMP';
         return $prefix . '-' . str_pad((string) $this->sampleId, 6, '0', STR_PAD_LEFT);
+    }
+
+    /** Facility where the sample was collected / the test was performed. */
+    public function facility(): BelongsTo
+    {
+        return $this->belongsTo(Facility::class, 'facilityId', 'facilityId');
     }
 
     public function client(): BelongsTo

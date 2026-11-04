@@ -31,7 +31,8 @@ use App\Http\Controllers\Api\HpvSampleController;
 use App\Http\Controllers\Api\ScreeningSampleController;
 
 use App\Http\Controllers\Api\ScreenedClientController;
-// use App\Http\Controllers\Api\ScreeningSampleController;
+use App\Http\Controllers\Api\ReferredClientController;
+
 
 
 use Illuminate\Support\Facades\Route;
@@ -153,6 +154,8 @@ Route::post('/screening-samples/{id}/attachment', [ScreeningSampleController::cl
 Route::get('/screening-samples/{id}/attachment', [ScreeningSampleController::class, 'attachment']);
 Route::delete('/screening-samples/{id}/attachment', [ScreeningSampleController::class, 'deleteAttachment']);
 
+Route::get('/referred-clients', [ReferredClientController::class, 'index']);
+Route::patch('/referred-clients/{referral}/status', [ClientReferralController::class, 'updateStatus']);
 
 
 Route::get('/screened-clients', [ScreenedClientController::class, 'index']);

@@ -9,6 +9,7 @@ use App\Http\Requests\StoreOutcomeClassificationRequest;
 use App\Models\Client;
 use App\Models\ClientReferral;
 use App\Models\DiagnosticEvaluation;
+use App\Models\Facility;
 use App\Models\ScreeningVisit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -261,6 +262,12 @@ class ScreeningVisitController extends Controller
 
         $data = $request->validated();
 
+        // The facility the user picked on the outcome page. StoreOutcomeClassificationRequest has no rule for it,
+        // so validated() drops it - read it here instead.
+        $chosen = $request->validate([
+            'referralFacilityId' => ['nullable', 'integer', 'exists:facilities,facilityId'],
+        ])['referralFacilityId'] ?? null;
+
     $visit->update([
         ...$data,
         'outcomeClassifiedBy' => auth('api')->id(),
@@ -283,25 +290,34 @@ class ScreeningVisitController extends Controller
             $fromFacility = $visit->facility;
 
             if ($client && $fromFacility) {
-                $resolution = $referralRouting->resolveForStage($fromFacility, 'stage3');
-                $toFacility = $resolution['facility'];
-                $isSelfReferral = $resolution['isSelfReferral'];
+                if ($chosen) {
+                    // The user chose the facility: refer exactly there, never to the "closest" one.
+                    $toFacility = Facility::find($chosen);
+                    $isSelfReferral = $toFacility && (int) $toFacility->facilityId === (int) $fromFacility->facilityId;
+                } else {
+                    // Nothing chosen (e.g. an older client or an API call): fall back to the facility hierarchy.
+                    $resolution = $referralRouting->resolveForStage($fromFacility, 'stage3');
+                    $toFacility = $resolution['facility'];
+                    $isSelfReferral = $resolution['isSelfReferral'];
+                }
 
                 if ($toFacility) {
                     $urgencyNote = $visit->overallOutcome === 'urgent_referral'
-                        ? 'URGENT — same-day referral required.'
-                        : 'Referred following a suspicious Stage 2 screening outcome.';
+                        ? 'URGENT — same-day referral for treatment required.'
+                        : 'Referred for further diagnosis following a suspicious Stage 2 screening outcome.';
 
                     if ($isSelfReferral) {
                         $urgencyNote .= ' This facility is Stage 3-capable — client continues here, no physical transfer needed.';
                     }
 
-                    $referral = $referralService->referToMainHub(
-                        $client,
-                        $fromFacility,
-                        $toFacility,
-                        trim($urgencyNote . ' ' . ($visit->outcomeNotes ?? '')),
-                    );
+                    $referralNotes = trim($urgencyNote . ' ' . ($visit->outcomeNotes ?? ''));
+
+                    // Urgent referral for treatment goes straight to the chosen treatment centre (Stage 4).
+                    // Everything else is a referral for further diagnosis (Stage 3).
+                    // To keep urgent cases going through diagnosis first, delete this branch.
+                    $referral = ($visit->overallOutcome === 'urgent_referral' && $chosen && !$isSelfReferral)
+                        ? $referralService->referToTreatment($client, $fromFacility, $toFacility, $referralNotes)
+                        : $referralService->referToMainHub($client, $fromFacility, $toFacility, $referralNotes);
                     $referral->load('toFacility', 'fromFacility');
                 }
             }

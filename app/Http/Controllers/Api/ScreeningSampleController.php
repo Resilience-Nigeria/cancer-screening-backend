@@ -15,7 +15,11 @@ use Illuminate\Validation\Rule;
 
 class ScreeningSampleController extends Controller
 {
-    private const WITH_CLIENT = 'client:clientId,fullName,gender,dateOfBirth,phoneNumber';
+    // Client details for the result pop-up, and the facility where the sample was taken / the test was done.
+    private const WITH_CLIENT = [
+        'client:clientId,fullName,gender,dateOfBirth,phoneNumber,email,hospitalNumber,stateOfResidence,lgaOfResidence,address',
+        'facility:facilityId,facilityName,facilityState',
+    ];
 
     /**
      * GET /screening-samples
