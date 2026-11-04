@@ -289,6 +289,11 @@ class ScreeningSampleController extends Controller
             }
             $rules["resultMeta.{$f['name']}"] = $r;
         }
+        if ($sample->testType === 'hpv_dna') {
+            $rules['resultMeta.riskCategory']  = ['nullable', Rule::in(['low', 'medium', 'high'])];
+            $rules['resultMeta.riskSuggested'] = ['nullable', Rule::in(['low', 'medium', 'high'])];
+            $rules['resultMeta.riskOverridden'] = ['nullable', Rule::in(['yes'])];
+        }
         if ($hasValue) {
             $rules['resultValue'] = ['required', 'numeric', 'min:' . $test['value']['min'], 'max:' . $test['value']['max']];
         }

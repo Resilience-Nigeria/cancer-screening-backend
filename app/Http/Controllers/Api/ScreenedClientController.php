@@ -380,7 +380,7 @@ class ScreenedClientController extends Controller
         $scope = fn ($q) => $q->when($visible !== null, fn ($x) => $x->whereIn('facilityId', $visible));
 
         return response()->json([
-            'version' => 'screened-clients-v5',
+            'version' => 'screened-clients-v6',
             'clients' => $rows,
             'total'   => $page->total(),
             'page'    => $page->currentPage(),
@@ -392,6 +392,7 @@ class ScreenedClientController extends Controller
             'summary' => [
                 'screened'   => (clone $all)->count(),
                 'suspicious' => $this->screenedQuery($visible, $rels, ['result' => 'suspicious'])->count(),
+                'nonSuspicious' => $this->screenedQuery($visible, $rels, ['result' => 'non_suspicious'])->count(),
                 'awaiting'   => $scope(ScreeningSample::query())->where('status', 'collected')->distinct()->count('clientId'),
                 'urgentLabs' => $scope(ScreeningSample::query())->where('status', 'result_released')->where('resultSeverity', 'urgent')->distinct()->count('clientId'),
             ],

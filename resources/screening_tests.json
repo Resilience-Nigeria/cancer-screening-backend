@@ -1,811 +1,909 @@
 {
- "cancerTypes": [
-  {
-   "value": "breast",
-   "label": "Breast"
-  },
-  {
-   "value": "cervical",
-   "label": "Cervical"
-  },
-  {
-   "value": "prostate",
-   "label": "Prostate"
-  },
-  {
-   "value": "liver",
-   "label": "Liver"
-  },
-  {
-   "value": "colorectal",
-   "label": "Colorectal"
-  }
- ],
- "tests": [
-  {
-   "key": "hpv_dna",
-   "cancerType": "cervical",
-   "label": "HPV DNA test",
-   "refPrefix": "HPV",
-   "kind": "specimen",
-   "sex": "female",
-   "specimenTypes": [
-    "Cervical swab",
-    "Vaginal swab (self-collected)"
-   ],
-   "collectionMethods": [
+  "cancerTypes": [
     {
-     "value": "clinician_collected",
-     "label": "Clinician-collected"
+      "value": "breast",
+      "label": "Breast"
     },
     {
-     "value": "self_collected",
-     "label": "Self-collected"
+      "value": "cervical",
+      "label": "Cervical"
+    },
+    {
+      "value": "prostate",
+      "label": "Prostate"
+    },
+    {
+      "value": "liver",
+      "label": "Liver"
+    },
+    {
+      "value": "colorectal",
+      "label": "Colorectal"
     }
-   ],
-   "results": [
+  ],
+  "tests": [
     {
-     "value": "negative",
-     "label": "Negative",
-     "severity": "normal"
+      "key": "hpv_dna",
+      "cancerType": "cervical",
+      "label": "HPV DNA test",
+      "refPrefix": "HPV",
+      "kind": "specimen",
+      "sex": "female",
+      "specimenTypes": [
+        "Cervical swab",
+        "Vaginal swab (self-collected)"
+      ],
+      "collectionMethods": [
+        {
+          "value": "clinician_collected",
+          "label": "Clinician-collected"
+        },
+        {
+          "value": "self_collected",
+          "label": "Self-collected"
+        }
+      ],
+      "results": [
+        {
+          "value": "negative",
+          "label": "Negative",
+          "severity": "normal"
+        },
+        {
+          "value": "positive",
+          "label": "Positive",
+          "severity": "abnormal"
+        },
+        {
+          "value": "indeterminate",
+          "label": "Indeterminate",
+          "severity": "neutral"
+        }
+      ],
+      "detail": {
+        "name": "hpvGenotype",
+        "label": "HPV genotype / group",
+        "requiredFor": [
+          "positive"
+        ],
+        "options": [
+          {
+            "value": "16",
+            "label": "16",
+            "group": "High risk (oncogenic)"
+          },
+          {
+            "value": "18",
+            "label": "18",
+            "group": "High risk (oncogenic)"
+          },
+          {
+            "value": "45",
+            "label": "45",
+            "group": "High risk (oncogenic)"
+          },
+          {
+            "value": "26",
+            "label": "26",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "31",
+            "label": "31",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "33",
+            "label": "33",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "35",
+            "label": "35",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "39",
+            "label": "39",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "51",
+            "label": "51",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "52",
+            "label": "52",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "53",
+            "label": "53",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "56",
+            "label": "56",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "58",
+            "label": "58",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "59",
+            "label": "59",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "66",
+            "label": "66",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "68",
+            "label": "68",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "73",
+            "label": "73",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "82",
+            "label": "82",
+            "group": "Medium risk (other oncogenic / probably oncogenic)"
+          },
+          {
+            "value": "6",
+            "label": "6",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "11",
+            "label": "11",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "40",
+            "label": "40",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "42",
+            "label": "42",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "43",
+            "label": "43",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "44",
+            "label": "44",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "54",
+            "label": "54",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "61",
+            "label": "61",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "70",
+            "label": "70",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "72",
+            "label": "72",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "81",
+            "label": "81",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "89",
+            "label": "89",
+            "group": "Low risk (non-oncogenic)"
+          },
+          {
+            "value": "grp_16_18",
+            "label": "16/18 detected (Truenat group)",
+            "group": "Truenat group results"
+          },
+          {
+            "value": "grp_other_hr",
+            "label": "31/33/35/45/52/58 detected (Truenat group)",
+            "group": "Truenat group results"
+          },
+          {
+            "value": "grp_both",
+            "label": "16/18 and 31/33/35/45/52/58 detected",
+            "group": "Truenat group results"
+          },
+          {
+            "value": "other",
+            "label": "Other",
+            "group": "Other"
+          }
+        ]
+      },
+      "extraFields": [
+        {
+          "name": "assay",
+          "label": "Test platform",
+          "type": "select",
+          "options": [
+            "Truenat HPV-HR Plus",
+            "Other platform"
+          ]
+        },
+        {
+          "name": "runStatus",
+          "label": "Run status (from the machine report)",
+          "type": "select",
+          "required": true,
+          "options": [
+            "Valid",
+            "Invalid",
+            "Error"
+          ],
+          "inconclusiveWhen": [
+            "Invalid",
+            "Error"
+          ]
+        },
+        {
+          "name": "controlCt",
+          "label": "Internal control Ct value",
+          "type": "number",
+          "min": 0,
+          "max": 60
+        },
+        {
+          "name": "lotNumber",
+          "label": "Kit lot number",
+          "type": "text"
+        },
+        {
+          "name": "lotExpiry",
+          "label": "Kit expiry (MM-YY)",
+          "type": "text"
+        },
+        {
+          "name": "operator",
+          "label": "Lab operator",
+          "type": "text"
+        }
+      ]
     },
     {
-     "value": "positive",
-     "label": "Positive",
-     "severity": "abnormal"
+      "key": "cervical_cytology",
+      "cancerType": "cervical",
+      "label": "Pap smear / cytology",
+      "refPrefix": "PAP",
+      "kind": "specimen",
+      "sex": "female",
+      "specimenTypes": [
+        "Conventional smear",
+        "Liquid-based cytology"
+      ],
+      "results": [
+        {
+          "value": "nilm",
+          "label": "Negative for intraepithelial lesion (NILM)",
+          "severity": "normal"
+        },
+        {
+          "value": "asc_us",
+          "label": "ASC-US",
+          "severity": "abnormal"
+        },
+        {
+          "value": "lsil",
+          "label": "LSIL",
+          "severity": "abnormal"
+        },
+        {
+          "value": "asc_h",
+          "label": "ASC-H",
+          "severity": "urgent"
+        },
+        {
+          "value": "hsil",
+          "label": "HSIL",
+          "severity": "urgent"
+        },
+        {
+          "value": "agc",
+          "label": "AGC (atypical glandular cells)",
+          "severity": "urgent"
+        },
+        {
+          "value": "carcinoma",
+          "label": "Squamous cell carcinoma",
+          "severity": "urgent"
+        },
+        {
+          "value": "unsatisfactory",
+          "label": "Unsatisfactory – repeat sample",
+          "severity": "neutral"
+        }
+      ]
     },
     {
-     "value": "indeterminate",
-     "label": "Indeterminate",
-     "severity": "neutral"
+      "key": "via",
+      "cancerType": "cervical",
+      "label": "VIA / VILI",
+      "refPrefix": "VIA",
+      "kind": "procedure",
+      "sex": "female",
+      "results": [
+        {
+          "value": "negative",
+          "label": "Negative",
+          "severity": "normal"
+        },
+        {
+          "value": "positive",
+          "label": "Positive",
+          "severity": "abnormal"
+        },
+        {
+          "value": "suspicious_cancer",
+          "label": "Suspicious for cancer",
+          "severity": "urgent"
+        }
+      ]
+    },
+    {
+      "key": "cervical_biopsy",
+      "cancerType": "cervical",
+      "label": "Cervical biopsy (histology)",
+      "refPrefix": "CBX",
+      "kind": "specimen",
+      "sex": "female",
+      "specimenTypes": [
+        "Punch biopsy",
+        "LEEP specimen",
+        "Endocervical curettage"
+      ],
+      "results": [
+        {
+          "value": "normal",
+          "label": "Normal / benign",
+          "severity": "normal"
+        },
+        {
+          "value": "cin1",
+          "label": "CIN 1",
+          "severity": "abnormal"
+        },
+        {
+          "value": "cin2",
+          "label": "CIN 2",
+          "severity": "urgent"
+        },
+        {
+          "value": "cin3",
+          "label": "CIN 3 / carcinoma in situ",
+          "severity": "urgent"
+        },
+        {
+          "value": "invasive",
+          "label": "Invasive carcinoma",
+          "severity": "urgent"
+        },
+        {
+          "value": "inadequate",
+          "label": "Inadequate specimen",
+          "severity": "neutral"
+        }
+      ]
+    },
+    {
+      "key": "mammography",
+      "cancerType": "breast",
+      "label": "Mammography",
+      "refPrefix": "MAM",
+      "kind": "procedure",
+      "sex": "any",
+      "results": [
+        {
+          "value": "0",
+          "label": "BI-RADS 0 – Incomplete, needs more imaging",
+          "severity": "abnormal"
+        },
+        {
+          "value": "1",
+          "label": "BI-RADS 1 – Negative",
+          "severity": "normal"
+        },
+        {
+          "value": "2",
+          "label": "BI-RADS 2 – Benign",
+          "severity": "normal"
+        },
+        {
+          "value": "3",
+          "label": "BI-RADS 3 – Probably benign",
+          "severity": "abnormal"
+        },
+        {
+          "value": "4",
+          "label": "BI-RADS 4 – Suspicious",
+          "severity": "urgent"
+        },
+        {
+          "value": "5",
+          "label": "BI-RADS 5 – Highly suggestive of malignancy",
+          "severity": "urgent"
+        },
+        {
+          "value": "6",
+          "label": "BI-RADS 6 – Known malignancy",
+          "severity": "urgent"
+        }
+      ]
+    },
+    {
+      "key": "breast_ultrasound",
+      "cancerType": "breast",
+      "label": "Breast ultrasound",
+      "refPrefix": "BUS",
+      "kind": "procedure",
+      "sex": "any",
+      "results": [
+        {
+          "value": "0",
+          "label": "BI-RADS 0 – Incomplete, needs more imaging",
+          "severity": "abnormal"
+        },
+        {
+          "value": "1",
+          "label": "BI-RADS 1 – Negative",
+          "severity": "normal"
+        },
+        {
+          "value": "2",
+          "label": "BI-RADS 2 – Benign",
+          "severity": "normal"
+        },
+        {
+          "value": "3",
+          "label": "BI-RADS 3 – Probably benign",
+          "severity": "abnormal"
+        },
+        {
+          "value": "4",
+          "label": "BI-RADS 4 – Suspicious",
+          "severity": "urgent"
+        },
+        {
+          "value": "5",
+          "label": "BI-RADS 5 – Highly suggestive of malignancy",
+          "severity": "urgent"
+        },
+        {
+          "value": "6",
+          "label": "BI-RADS 6 – Known malignancy",
+          "severity": "urgent"
+        }
+      ]
+    },
+    {
+      "key": "breast_biopsy",
+      "cancerType": "breast",
+      "label": "Breast biopsy / FNA",
+      "refPrefix": "BBX",
+      "kind": "specimen",
+      "sex": "any",
+      "specimenTypes": [
+        "Core needle biopsy",
+        "Fine needle aspirate",
+        "Excision biopsy"
+      ],
+      "results": [
+        {
+          "value": "benign",
+          "label": "Benign",
+          "severity": "normal"
+        },
+        {
+          "value": "atypical",
+          "label": "Atypical / high-risk lesion",
+          "severity": "abnormal"
+        },
+        {
+          "value": "dcis",
+          "label": "DCIS",
+          "severity": "urgent"
+        },
+        {
+          "value": "invasive",
+          "label": "Invasive carcinoma",
+          "severity": "urgent"
+        },
+        {
+          "value": "inadequate",
+          "label": "Inadequate specimen",
+          "severity": "neutral"
+        }
+      ]
+    },
+    {
+      "key": "psa",
+      "cancerType": "prostate",
+      "label": "PSA blood test",
+      "refPrefix": "PSA",
+      "kind": "specimen",
+      "sex": "male",
+      "specimenTypes": [
+        "Blood (serum)"
+      ],
+      "value": {
+        "label": "PSA level",
+        "unit": "ng/mL",
+        "min": 0,
+        "max": 10000,
+        "bands": [
+          {
+            "below": 4,
+            "result": "normal"
+          },
+          {
+            "below": 10,
+            "result": "elevated"
+          },
+          {
+            "result": "high"
+          }
+        ]
+      },
+      "results": [
+        {
+          "value": "normal",
+          "label": "Normal (< 4 ng/mL)",
+          "severity": "normal"
+        },
+        {
+          "value": "elevated",
+          "label": "Elevated (4 – 10 ng/mL)",
+          "severity": "abnormal"
+        },
+        {
+          "value": "high",
+          "label": "Highly elevated (> 10 ng/mL)",
+          "severity": "urgent"
+        }
+      ]
+    },
+    {
+      "key": "dre",
+      "cancerType": "prostate",
+      "label": "Digital rectal exam (DRE)",
+      "refPrefix": "DRE",
+      "kind": "procedure",
+      "sex": "male",
+      "results": [
+        {
+          "value": "normal",
+          "label": "Normal",
+          "severity": "normal"
+        },
+        {
+          "value": "abnormal",
+          "label": "Abnormal (nodule / hardness / asymmetry)",
+          "severity": "urgent"
+        }
+      ]
+    },
+    {
+      "key": "prostate_biopsy",
+      "cancerType": "prostate",
+      "label": "Prostate biopsy",
+      "refPrefix": "PBX",
+      "kind": "specimen",
+      "sex": "male",
+      "specimenTypes": [
+        "Transrectal biopsy",
+        "Transperineal biopsy"
+      ],
+      "results": [
+        {
+          "value": "benign",
+          "label": "Benign",
+          "severity": "normal"
+        },
+        {
+          "value": "pin",
+          "label": "High-grade PIN / ASAP",
+          "severity": "abnormal"
+        },
+        {
+          "value": "adenocarcinoma",
+          "label": "Adenocarcinoma",
+          "severity": "urgent"
+        },
+        {
+          "value": "inadequate",
+          "label": "Inadequate specimen",
+          "severity": "neutral"
+        }
+      ],
+      "detail": {
+        "name": "gradeGroup",
+        "label": "ISUP grade group",
+        "requiredFor": [
+          "adenocarcinoma"
+        ],
+        "options": [
+          {
+            "value": "1",
+            "label": "Grade group 1"
+          },
+          {
+            "value": "2",
+            "label": "Grade group 2"
+          },
+          {
+            "value": "3",
+            "label": "Grade group 3"
+          },
+          {
+            "value": "4",
+            "label": "Grade group 4"
+          },
+          {
+            "value": "5",
+            "label": "Grade group 5"
+          }
+        ]
+      }
+    },
+    {
+      "key": "afp",
+      "cancerType": "liver",
+      "label": "AFP blood test",
+      "refPrefix": "AFP",
+      "kind": "specimen",
+      "sex": "any",
+      "specimenTypes": [
+        "Blood (serum)"
+      ],
+      "value": {
+        "label": "AFP level",
+        "unit": "ng/mL",
+        "min": 0,
+        "max": 1000000,
+        "bands": [
+          {
+            "below": 20,
+            "result": "normal"
+          },
+          {
+            "below": 400,
+            "result": "elevated"
+          },
+          {
+            "result": "high"
+          }
+        ]
+      },
+      "results": [
+        {
+          "value": "normal",
+          "label": "Normal (< 20 ng/mL)",
+          "severity": "normal"
+        },
+        {
+          "value": "elevated",
+          "label": "Elevated (20 – 400 ng/mL)",
+          "severity": "abnormal"
+        },
+        {
+          "value": "high",
+          "label": "Highly elevated (> 400 ng/mL)",
+          "severity": "urgent"
+        }
+      ]
+    },
+    {
+      "key": "liver_ultrasound",
+      "cancerType": "liver",
+      "label": "Liver ultrasound",
+      "refPrefix": "LUS",
+      "kind": "procedure",
+      "sex": "any",
+      "results": [
+        {
+          "value": "normal",
+          "label": "Normal",
+          "severity": "normal"
+        },
+        {
+          "value": "chronic_changes",
+          "label": "Chronic liver changes (fatty liver / cirrhosis)",
+          "severity": "abnormal"
+        },
+        {
+          "value": "suspicious_lesion",
+          "label": "Suspicious focal lesion",
+          "severity": "urgent"
+        },
+        {
+          "value": "inadequate",
+          "label": "Inadequate study",
+          "severity": "neutral"
+        }
+      ]
+    },
+    {
+      "key": "hbsag",
+      "cancerType": "liver",
+      "label": "Hepatitis B (HBsAg)",
+      "refPrefix": "HBS",
+      "kind": "specimen",
+      "sex": "any",
+      "specimenTypes": [
+        "Blood (serum)",
+        "Rapid test (fingerprick)"
+      ],
+      "results": [
+        {
+          "value": "negative",
+          "label": "Negative",
+          "severity": "normal"
+        },
+        {
+          "value": "positive",
+          "label": "Positive",
+          "severity": "abnormal"
+        },
+        {
+          "value": "indeterminate",
+          "label": "Indeterminate",
+          "severity": "neutral"
+        }
+      ]
+    },
+    {
+      "key": "anti_hcv",
+      "cancerType": "liver",
+      "label": "Hepatitis C (anti-HCV)",
+      "refPrefix": "HCV",
+      "kind": "specimen",
+      "sex": "any",
+      "specimenTypes": [
+        "Blood (serum)",
+        "Rapid test (fingerprick)"
+      ],
+      "results": [
+        {
+          "value": "negative",
+          "label": "Negative",
+          "severity": "normal"
+        },
+        {
+          "value": "positive",
+          "label": "Positive",
+          "severity": "abnormal"
+        },
+        {
+          "value": "indeterminate",
+          "label": "Indeterminate",
+          "severity": "neutral"
+        }
+      ]
+    },
+    {
+      "key": "fit",
+      "cancerType": "colorectal",
+      "label": "FIT / FOBT (stool test)",
+      "refPrefix": "FIT",
+      "kind": "specimen",
+      "sex": "any",
+      "specimenTypes": [
+        "Stool"
+      ],
+      "results": [
+        {
+          "value": "negative",
+          "label": "Negative",
+          "severity": "normal"
+        },
+        {
+          "value": "positive",
+          "label": "Positive",
+          "severity": "abnormal"
+        },
+        {
+          "value": "invalid",
+          "label": "Invalid – repeat sample",
+          "severity": "neutral"
+        }
+      ]
+    },
+    {
+      "key": "colonoscopy",
+      "cancerType": "colorectal",
+      "label": "Colonoscopy / sigmoidoscopy",
+      "refPrefix": "COL",
+      "kind": "procedure",
+      "sex": "any",
+      "results": [
+        {
+          "value": "normal",
+          "label": "Normal",
+          "severity": "normal"
+        },
+        {
+          "value": "polyps",
+          "label": "Polyp(s) found",
+          "severity": "abnormal"
+        },
+        {
+          "value": "suspicious_mass",
+          "label": "Suspicious mass",
+          "severity": "urgent"
+        },
+        {
+          "value": "incomplete",
+          "label": "Incomplete / poor preparation",
+          "severity": "neutral"
+        }
+      ]
+    },
+    {
+      "key": "colorectal_biopsy",
+      "cancerType": "colorectal",
+      "label": "Colorectal biopsy / polyp histology",
+      "refPrefix": "CRB",
+      "kind": "specimen",
+      "sex": "any",
+      "specimenTypes": [
+        "Polyp",
+        "Mucosal biopsy",
+        "Excision specimen"
+      ],
+      "results": [
+        {
+          "value": "normal",
+          "label": "Normal / benign",
+          "severity": "normal"
+        },
+        {
+          "value": "adenoma",
+          "label": "Adenoma (low-grade)",
+          "severity": "abnormal"
+        },
+        {
+          "value": "advanced_adenoma",
+          "label": "Advanced adenoma / high-grade dysplasia",
+          "severity": "urgent"
+        },
+        {
+          "value": "adenocarcinoma",
+          "label": "Adenocarcinoma",
+          "severity": "urgent"
+        },
+        {
+          "value": "inadequate",
+          "label": "Inadequate specimen",
+          "severity": "neutral"
+        }
+      ]
     }
-   ],
-   "detail": {
-    "name": "hpvGenotype",
-    "label": "HPV genotype / group",
-    "requiredFor": [
-     "positive"
-    ],
-    "options": [
-     {
-      "value": "16",
-      "label": "16"
-     },
-     {
-      "value": "18",
-      "label": "18"
-     },
-     {
-      "value": "31",
-      "label": "31"
-     },
-     {
-      "value": "33",
-      "label": "33"
-     },
-     {
-      "value": "35",
-      "label": "35"
-     },
-     {
-      "value": "39",
-      "label": "39"
-     },
-     {
-      "value": "45",
-      "label": "45"
-     },
-     {
-      "value": "51",
-      "label": "51"
-     },
-     {
-      "value": "52",
-      "label": "52"
-     },
-     {
-      "value": "56",
-      "label": "56"
-     },
-     {
-      "value": "58",
-      "label": "58"
-     },
-     {
-      "value": "59",
-      "label": "59"
-     },
-     {
-      "value": "66",
-      "label": "66"
-     },
-     {
-      "value": "68",
-      "label": "68"
-     },
-     {
-      "value": "grp_16_18",
-      "label": "16/18 detected (Truenat group)"
-     },
-     {
-      "value": "grp_other_hr",
-      "label": "31/33/35/45/52/58 detected (Truenat group)"
-     },
-     {
-      "value": "grp_both",
-      "label": "16/18 and 31/33/35/45/52/58 detected"
-     },
-     {
-      "value": "other",
-      "label": "Other"
-     }
-    ]
-   },
-   "extraFields": [
-    {
-     "name": "assay",
-     "label": "Test platform",
-     "type": "select",
-     "options": [
-      "Truenat HPV-HR Plus",
-      "Other platform"
-     ]
-    },
-    {
-     "name": "runStatus",
-     "label": "Run status (from the machine report)",
-     "type": "select",
-     "required": true,
-     "options": [
-      "Valid",
-      "Invalid",
-      "Error"
-     ],
-     "inconclusiveWhen": [
-      "Invalid",
-      "Error"
-     ]
-    },
-    {
-     "name": "controlCt",
-     "label": "Internal control Ct value",
-     "type": "number",
-     "min": 0,
-     "max": 60
-    },
-    {
-     "name": "lotNumber",
-     "label": "Kit lot number",
-     "type": "text"
-    },
-    {
-     "name": "lotExpiry",
-     "label": "Kit expiry (MM-YY)",
-     "type": "text"
-    },
-    {
-     "name": "operator",
-     "label": "Lab operator",
-     "type": "text"
-    }
-   ]
-  },
-  {
-   "key": "cervical_cytology",
-   "cancerType": "cervical",
-   "label": "Pap smear / cytology",
-   "refPrefix": "PAP",
-   "kind": "specimen",
-   "sex": "female",
-   "specimenTypes": [
-    "Conventional smear",
-    "Liquid-based cytology"
-   ],
-   "results": [
-    {
-     "value": "nilm",
-     "label": "Negative for intraepithelial lesion (NILM)",
-     "severity": "normal"
-    },
-    {
-     "value": "asc_us",
-     "label": "ASC-US",
-     "severity": "abnormal"
-    },
-    {
-     "value": "lsil",
-     "label": "LSIL",
-     "severity": "abnormal"
-    },
-    {
-     "value": "asc_h",
-     "label": "ASC-H",
-     "severity": "urgent"
-    },
-    {
-     "value": "hsil",
-     "label": "HSIL",
-     "severity": "urgent"
-    },
-    {
-     "value": "agc",
-     "label": "AGC (atypical glandular cells)",
-     "severity": "urgent"
-    },
-    {
-     "value": "carcinoma",
-     "label": "Squamous cell carcinoma",
-     "severity": "urgent"
-    },
-    {
-     "value": "unsatisfactory",
-     "label": "Unsatisfactory \u2013 repeat sample",
-     "severity": "neutral"
-    }
-   ]
-  },
-  {
-   "key": "via",
-   "cancerType": "cervical",
-   "label": "VIA / VILI",
-   "refPrefix": "VIA",
-   "kind": "procedure",
-   "sex": "female",
-   "results": [
-    {
-     "value": "negative",
-     "label": "Negative",
-     "severity": "normal"
-    },
-    {
-     "value": "positive",
-     "label": "Positive",
-     "severity": "abnormal"
-    },
-    {
-     "value": "suspicious_cancer",
-     "label": "Suspicious for cancer",
-     "severity": "urgent"
-    }
-   ]
-  },
-  {
-   "key": "cervical_biopsy",
-   "cancerType": "cervical",
-   "label": "Cervical biopsy (histology)",
-   "refPrefix": "CBX",
-   "kind": "specimen",
-   "sex": "female",
-   "specimenTypes": [
-    "Punch biopsy",
-    "LEEP specimen",
-    "Endocervical curettage"
-   ],
-   "results": [
-    {
-     "value": "normal",
-     "label": "Normal / benign",
-     "severity": "normal"
-    },
-    {
-     "value": "cin1",
-     "label": "CIN 1",
-     "severity": "abnormal"
-    },
-    {
-     "value": "cin2",
-     "label": "CIN 2",
-     "severity": "urgent"
-    },
-    {
-     "value": "cin3",
-     "label": "CIN 3 / carcinoma in situ",
-     "severity": "urgent"
-    },
-    {
-     "value": "invasive",
-     "label": "Invasive carcinoma",
-     "severity": "urgent"
-    },
-    {
-     "value": "inadequate",
-     "label": "Inadequate specimen",
-     "severity": "neutral"
-    }
-   ]
-  },
-  {
-   "key": "mammography",
-   "cancerType": "breast",
-   "label": "Mammography",
-   "refPrefix": "MAM",
-   "kind": "procedure",
-   "sex": "any",
-   "results": [
-    {
-     "value": "0",
-     "label": "BI-RADS 0 \u2013 Incomplete, needs more imaging",
-     "severity": "abnormal"
-    },
-    {
-     "value": "1",
-     "label": "BI-RADS 1 \u2013 Negative",
-     "severity": "normal"
-    },
-    {
-     "value": "2",
-     "label": "BI-RADS 2 \u2013 Benign",
-     "severity": "normal"
-    },
-    {
-     "value": "3",
-     "label": "BI-RADS 3 \u2013 Probably benign",
-     "severity": "abnormal"
-    },
-    {
-     "value": "4",
-     "label": "BI-RADS 4 \u2013 Suspicious",
-     "severity": "urgent"
-    },
-    {
-     "value": "5",
-     "label": "BI-RADS 5 \u2013 Highly suggestive of malignancy",
-     "severity": "urgent"
-    },
-    {
-     "value": "6",
-     "label": "BI-RADS 6 \u2013 Known malignancy",
-     "severity": "urgent"
-    }
-   ]
-  },
-  {
-   "key": "breast_ultrasound",
-   "cancerType": "breast",
-   "label": "Breast ultrasound",
-   "refPrefix": "BUS",
-   "kind": "procedure",
-   "sex": "any",
-   "results": [
-    {
-     "value": "0",
-     "label": "BI-RADS 0 \u2013 Incomplete, needs more imaging",
-     "severity": "abnormal"
-    },
-    {
-     "value": "1",
-     "label": "BI-RADS 1 \u2013 Negative",
-     "severity": "normal"
-    },
-    {
-     "value": "2",
-     "label": "BI-RADS 2 \u2013 Benign",
-     "severity": "normal"
-    },
-    {
-     "value": "3",
-     "label": "BI-RADS 3 \u2013 Probably benign",
-     "severity": "abnormal"
-    },
-    {
-     "value": "4",
-     "label": "BI-RADS 4 \u2013 Suspicious",
-     "severity": "urgent"
-    },
-    {
-     "value": "5",
-     "label": "BI-RADS 5 \u2013 Highly suggestive of malignancy",
-     "severity": "urgent"
-    },
-    {
-     "value": "6",
-     "label": "BI-RADS 6 \u2013 Known malignancy",
-     "severity": "urgent"
-    }
-   ]
-  },
-  {
-   "key": "breast_biopsy",
-   "cancerType": "breast",
-   "label": "Breast biopsy / FNA",
-   "refPrefix": "BBX",
-   "kind": "specimen",
-   "sex": "any",
-   "specimenTypes": [
-    "Core needle biopsy",
-    "Fine needle aspirate",
-    "Excision biopsy"
-   ],
-   "results": [
-    {
-     "value": "benign",
-     "label": "Benign",
-     "severity": "normal"
-    },
-    {
-     "value": "atypical",
-     "label": "Atypical / high-risk lesion",
-     "severity": "abnormal"
-    },
-    {
-     "value": "dcis",
-     "label": "DCIS",
-     "severity": "urgent"
-    },
-    {
-     "value": "invasive",
-     "label": "Invasive carcinoma",
-     "severity": "urgent"
-    },
-    {
-     "value": "inadequate",
-     "label": "Inadequate specimen",
-     "severity": "neutral"
-    }
-   ]
-  },
-  {
-   "key": "psa",
-   "cancerType": "prostate",
-   "label": "PSA blood test",
-   "refPrefix": "PSA",
-   "kind": "specimen",
-   "sex": "male",
-   "specimenTypes": [
-    "Blood (serum)"
-   ],
-   "value": {
-    "label": "PSA level",
-    "unit": "ng/mL",
-    "min": 0,
-    "max": 10000,
-    "bands": [
-     {
-      "below": 4,
-      "result": "normal"
-     },
-     {
-      "below": 10,
-      "result": "elevated"
-     },
-     {
-      "result": "high"
-     }
-    ]
-   },
-   "results": [
-    {
-     "value": "normal",
-     "label": "Normal (< 4 ng/mL)",
-     "severity": "normal"
-    },
-    {
-     "value": "elevated",
-     "label": "Elevated (4 \u2013 10 ng/mL)",
-     "severity": "abnormal"
-    },
-    {
-     "value": "high",
-     "label": "Highly elevated (> 10 ng/mL)",
-     "severity": "urgent"
-    }
-   ]
-  },
-  {
-   "key": "dre",
-   "cancerType": "prostate",
-   "label": "Digital rectal exam (DRE)",
-   "refPrefix": "DRE",
-   "kind": "procedure",
-   "sex": "male",
-   "results": [
-    {
-     "value": "normal",
-     "label": "Normal",
-     "severity": "normal"
-    },
-    {
-     "value": "abnormal",
-     "label": "Abnormal (nodule / hardness / asymmetry)",
-     "severity": "urgent"
-    }
-   ]
-  },
-  {
-   "key": "prostate_biopsy",
-   "cancerType": "prostate",
-   "label": "Prostate biopsy",
-   "refPrefix": "PBX",
-   "kind": "specimen",
-   "sex": "male",
-   "specimenTypes": [
-    "Transrectal biopsy",
-    "Transperineal biopsy"
-   ],
-   "results": [
-    {
-     "value": "benign",
-     "label": "Benign",
-     "severity": "normal"
-    },
-    {
-     "value": "pin",
-     "label": "High-grade PIN / ASAP",
-     "severity": "abnormal"
-    },
-    {
-     "value": "adenocarcinoma",
-     "label": "Adenocarcinoma",
-     "severity": "urgent"
-    },
-    {
-     "value": "inadequate",
-     "label": "Inadequate specimen",
-     "severity": "neutral"
-    }
-   ],
-   "detail": {
-    "name": "gradeGroup",
-    "label": "ISUP grade group",
-    "requiredFor": [
-     "adenocarcinoma"
-    ],
-    "options": [
-     {
-      "value": "1",
-      "label": "Grade group 1"
-     },
-     {
-      "value": "2",
-      "label": "Grade group 2"
-     },
-     {
-      "value": "3",
-      "label": "Grade group 3"
-     },
-     {
-      "value": "4",
-      "label": "Grade group 4"
-     },
-     {
-      "value": "5",
-      "label": "Grade group 5"
-     }
-    ]
-   }
-  },
-  {
-   "key": "afp",
-   "cancerType": "liver",
-   "label": "AFP blood test",
-   "refPrefix": "AFP",
-   "kind": "specimen",
-   "sex": "any",
-   "specimenTypes": [
-    "Blood (serum)"
-   ],
-   "value": {
-    "label": "AFP level",
-    "unit": "ng/mL",
-    "min": 0,
-    "max": 1000000,
-    "bands": [
-     {
-      "below": 20,
-      "result": "normal"
-     },
-     {
-      "below": 400,
-      "result": "elevated"
-     },
-     {
-      "result": "high"
-     }
-    ]
-   },
-   "results": [
-    {
-     "value": "normal",
-     "label": "Normal (< 20 ng/mL)",
-     "severity": "normal"
-    },
-    {
-     "value": "elevated",
-     "label": "Elevated (20 \u2013 400 ng/mL)",
-     "severity": "abnormal"
-    },
-    {
-     "value": "high",
-     "label": "Highly elevated (> 400 ng/mL)",
-     "severity": "urgent"
-    }
-   ]
-  },
-  {
-   "key": "liver_ultrasound",
-   "cancerType": "liver",
-   "label": "Liver ultrasound",
-   "refPrefix": "LUS",
-   "kind": "procedure",
-   "sex": "any",
-   "results": [
-    {
-     "value": "normal",
-     "label": "Normal",
-     "severity": "normal"
-    },
-    {
-     "value": "chronic_changes",
-     "label": "Chronic liver changes (fatty liver / cirrhosis)",
-     "severity": "abnormal"
-    },
-    {
-     "value": "suspicious_lesion",
-     "label": "Suspicious focal lesion",
-     "severity": "urgent"
-    },
-    {
-     "value": "inadequate",
-     "label": "Inadequate study",
-     "severity": "neutral"
-    }
-   ]
-  },
-  {
-   "key": "hbsag",
-   "cancerType": "liver",
-   "label": "Hepatitis B (HBsAg)",
-   "refPrefix": "HBS",
-   "kind": "specimen",
-   "sex": "any",
-   "specimenTypes": [
-    "Blood (serum)",
-    "Rapid test (fingerprick)"
-   ],
-   "results": [
-    {
-     "value": "negative",
-     "label": "Negative",
-     "severity": "normal"
-    },
-    {
-     "value": "positive",
-     "label": "Positive",
-     "severity": "abnormal"
-    },
-    {
-     "value": "indeterminate",
-     "label": "Indeterminate",
-     "severity": "neutral"
-    }
-   ]
-  },
-  {
-   "key": "anti_hcv",
-   "cancerType": "liver",
-   "label": "Hepatitis C (anti-HCV)",
-   "refPrefix": "HCV",
-   "kind": "specimen",
-   "sex": "any",
-   "specimenTypes": [
-    "Blood (serum)",
-    "Rapid test (fingerprick)"
-   ],
-   "results": [
-    {
-     "value": "negative",
-     "label": "Negative",
-     "severity": "normal"
-    },
-    {
-     "value": "positive",
-     "label": "Positive",
-     "severity": "abnormal"
-    },
-    {
-     "value": "indeterminate",
-     "label": "Indeterminate",
-     "severity": "neutral"
-    }
-   ]
-  },
-  {
-   "key": "fit",
-   "cancerType": "colorectal",
-   "label": "FIT / FOBT (stool test)",
-   "refPrefix": "FIT",
-   "kind": "specimen",
-   "sex": "any",
-   "specimenTypes": [
-    "Stool"
-   ],
-   "results": [
-    {
-     "value": "negative",
-     "label": "Negative",
-     "severity": "normal"
-    },
-    {
-     "value": "positive",
-     "label": "Positive",
-     "severity": "abnormal"
-    },
-    {
-     "value": "invalid",
-     "label": "Invalid \u2013 repeat sample",
-     "severity": "neutral"
-    }
-   ]
-  },
-  {
-   "key": "colonoscopy",
-   "cancerType": "colorectal",
-   "label": "Colonoscopy / sigmoidoscopy",
-   "refPrefix": "COL",
-   "kind": "procedure",
-   "sex": "any",
-   "results": [
-    {
-     "value": "normal",
-     "label": "Normal",
-     "severity": "normal"
-    },
-    {
-     "value": "polyps",
-     "label": "Polyp(s) found",
-     "severity": "abnormal"
-    },
-    {
-     "value": "suspicious_mass",
-     "label": "Suspicious mass",
-     "severity": "urgent"
-    },
-    {
-     "value": "incomplete",
-     "label": "Incomplete / poor preparation",
-     "severity": "neutral"
-    }
-   ]
-  },
-  {
-   "key": "colorectal_biopsy",
-   "cancerType": "colorectal",
-   "label": "Colorectal biopsy / polyp histology",
-   "refPrefix": "CRB",
-   "kind": "specimen",
-   "sex": "any",
-   "specimenTypes": [
-    "Polyp",
-    "Mucosal biopsy",
-    "Excision specimen"
-   ],
-   "results": [
-    {
-     "value": "normal",
-     "label": "Normal / benign",
-     "severity": "normal"
-    },
-    {
-     "value": "adenoma",
-     "label": "Adenoma (low-grade)",
-     "severity": "abnormal"
-    },
-    {
-     "value": "advanced_adenoma",
-     "label": "Advanced adenoma / high-grade dysplasia",
-     "severity": "urgent"
-    },
-    {
-     "value": "adenocarcinoma",
-     "label": "Adenocarcinoma",
-     "severity": "urgent"
-    },
-    {
-     "value": "inadequate",
-     "label": "Inadequate specimen",
-     "severity": "neutral"
-    }
-   ]
-  }
- ]
+  ]
 }
