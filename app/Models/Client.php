@@ -23,6 +23,8 @@ protected $keyType = 'string';
         'fullName',
         'gender',
         'dateOfBirth',
+        'dobEstimated',
+        'offlineId',
         'age',
         'phoneNumber',
         'phoneNotClients',
@@ -55,6 +57,7 @@ protected $keyType = 'string';
 
     protected $casts = [
         'dateOfBirth' => 'date',
+        'dobEstimated' => 'boolean',
         'registrationDate' => 'date',
         'phoneNotClients' => 'boolean',
         'otpSkipped' => 'boolean',

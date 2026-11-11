@@ -13,9 +13,21 @@ class StoreClientRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        foreach (['phoneNotClients', 'otpSkipped'] as $bool) {
+        foreach (['phoneNotClients', 'otpSkipped', 'dobEstimated'] as $bool) {
             if ($this->has($bool)) {
                 $this->merge([$bool => filter_var($this->input($bool), FILTER_VALIDATE_BOOLEAN)]);
+            }
+        }
+
+        // A typed age is stored as an estimated date of birth (1 January of the birth year).
+        $age = $this->input('age');
+        if (empty($this->input('dateOfBirth')) && $age !== null && $age !== '' && is_numeric($age)) {
+            $age = (int) $age;
+            if ($age >= 0 && $age <= 120) {
+                $this->merge([
+                    'dateOfBirth' => now()->subYears($age)->startOfYear()->toDateString(),
+                    'dobEstimated' => true,
+                ]);
             }
         }
     }
@@ -26,6 +38,8 @@ class StoreClientRequest extends FormRequest
             'fullName' => ['required', 'string', 'max:255'],
             'gender' => ['required', 'in:male,female'],
             'dateOfBirth' => ['required', 'date', 'before_or_equal:today'],
+            'dobEstimated' => ['nullable', 'boolean'],
+            'offlineId' => ['nullable', 'string', 'max:100'],
             'phoneNumber' => ['required', 'string', 'max:30'],
             'phoneNotClients' => ['nullable', 'boolean'],
             'caregiverName' => ['nullable', 'string', 'max:255'],
@@ -56,6 +70,7 @@ class StoreClientRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'dateOfBirth.required' => "Enter a date of birth or the client's age.",
             'email.email' => 'Please enter a valid email address.',
             'stateOfOrigin.required' => 'The state of origin field is required.',
             'lgaOfOrigin.required' => 'The LGA of origin field is required.',

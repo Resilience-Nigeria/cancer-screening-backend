@@ -13,8 +13,22 @@ class UpdateClientRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->has('phoneNotClients')) {
-            $this->merge(['phoneNotClients' => filter_var($this->input('phoneNotClients'), FILTER_VALIDATE_BOOLEAN)]);
+        foreach (['phoneNotClients', 'otpSkipped', 'dobEstimated'] as $bool) {
+            if ($this->has($bool)) {
+                $this->merge([$bool => filter_var($this->input($bool), FILTER_VALIDATE_BOOLEAN)]);
+            }
+        }
+
+        // A typed age is stored as an estimated date of birth (1 January of the birth year).
+        $age = $this->input('age');
+        if (empty($this->input('dateOfBirth')) && $age !== null && $age !== '' && is_numeric($age)) {
+            $age = (int) $age;
+            if ($age >= 0 && $age <= 120) {
+                $this->merge([
+                    'dateOfBirth' => now()->subYears($age)->startOfYear()->toDateString(),
+                    'dobEstimated' => true,
+                ]);
+            }
         }
     }
 
@@ -26,6 +40,7 @@ class UpdateClientRequest extends FormRequest
             'hospitalNumber' => ['nullable', 'string', 'max:50'],
             'gender' => ['sometimes', 'required', 'in:male,female'],
             'dateOfBirth' => ['sometimes', 'required', 'date', 'before_or_equal:today'],
+            'dobEstimated' => ['nullable', 'boolean'],
             'phoneNumber' => ['nullable', 'string', 'max:30'],
             'phoneNotClients' => ['nullable', 'boolean'],
             'caregiverName' => ['nullable', 'string', 'max:255'],
@@ -47,5 +62,10 @@ class UpdateClientRequest extends FormRequest
             'nextOfKinRelationship' => ['nullable', 'string', 'max:100'],
             'registrationDate' => ['sometimes', 'required', 'date'],
         ];
+    }
+
+    public function messages(): array
+    {
+        return ['dateOfBirth.required' => "Enter a date of birth or the client's age."];
     }
 }
