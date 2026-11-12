@@ -6,8 +6,7 @@
   // Logos: embedded when sent by Laravel's mailer, linked from APP_URL when sent through the Brevo API.
   // Replace the two files to change them:
   //   public/images/email/nicrat-logo.png   and   public/images/email/resilience-logo.png
-  <!-- $nicratLogo = public_path('images/email/nicrat-logo.png'); -->
-  <!-- $resilienceLogo = public_path('images/email/resilience-logo.png'); -->
+  
    $nicratLogo = 'https://ncsr.nicrat.gov.ng/assets/img/NCSR.svg';
    $resilienceLogo = 'https://ncsr.nicrat.gov.ng/assets/img/resilience.png';
 
