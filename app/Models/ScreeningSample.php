@@ -4,11 +4,17 @@ namespace App\Models;
 
 use App\Support\ScreeningTestCatalog;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Facility;
 
 class ScreeningSample extends Model
 {
+    use SoftDeletes;
+
+    // Soft deletes use this column (see the soft-delete migration).
+    const DELETED_AT = 'deletedAt';
+
     protected $table = 'screening_samples';
     protected $primaryKey = 'sampleId';
 
@@ -16,7 +22,7 @@ class ScreeningSample extends Model
         'clientId', 'visitId', 'facilityId',
         'cancerType', 'testType', 'specimenType', 'collectionMethod',
         'sampleDate', 'labSampleNumber', 'collectedBy', 'collectedById', 'notes',
-        'status',
+        'status', 'bookedFacilityId',
         'result', 'resultSeverity', 'resultValue', 'resultDetail', 'resultMeta', 'resultAttachmentPath', 'resultAttachmentName', 'resultAttachmentMime', 'resultDate', 'resultNotes', 'resultEnteredById',
     ];
 
@@ -48,6 +54,12 @@ class ScreeningSample extends Model
     public function facility(): BelongsTo
     {
         return $this->belongsTo(Facility::class, 'facilityId', 'facilityId');
+    }
+
+    /** Where a booked test will be done (status "booked"). */
+    public function bookedFacility(): BelongsTo
+    {
+        return $this->belongsTo(Facility::class, 'bookedFacilityId', 'facilityId');
     }
 
     public function client(): BelongsTo

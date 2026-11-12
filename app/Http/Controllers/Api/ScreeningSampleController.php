@@ -10,6 +10,7 @@ use App\Support\ScreeningLabSync;
 use App\Support\ScreeningTestCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -19,6 +20,7 @@ class ScreeningSampleController extends Controller
     private const WITH_CLIENT = [
         'client:clientId,fullName,gender,dateOfBirth,phoneNumber,email,hospitalNumber,stateOfResidence,lgaOfResidence,address',
         'facility:facilityId,facilityName,facilityState',
+        'bookedFacility:facilityId,facilityName,facilityState',
     ];
 
     /**
@@ -59,8 +61,12 @@ class ScreeningSampleController extends Controller
 
     /**
      * GET /screening-samples/results
-     * All released results with filters, paging and severity totals.
-     * ?cancerType= &testType= &severity= &dateFrom= &dateTo= &clientId= &search= &page= &perPage=
+     * All released results with filters, paging and totals.
+     * ?cancerType= &testType= &severity=normal|suspicious|neutral &duplicates=1 &dateFrom= &dateTo= &clientId= &search= &page= &perPage=
+     *
+     * Results are grouped as non-suspicious (normal), suspicious (urgent; older "abnormal" rows count here
+     * too) and inconclusive (neutral). A duplicate is a released result with the same client, test and
+     * sample date as another one; each row carries duplicateCount (how many share that key).
      */
     public function results(Request $request): JsonResponse
     {
@@ -87,30 +93,65 @@ class ScreeningSampleController extends Controller
                 });
             });
 
-        // Totals ignore the severity filter so the summary tiles stay clickable filters.
+        // Duplicate groups (same client + test + sample date) within the current filters.
+        $dupGroups = (clone $base)
+            ->selectRaw('clientId, testType, DATE(sampleDate) as d, COUNT(*) as n')
+            ->groupBy('clientId', 'testType', DB::raw('DATE(sampleDate)'))
+            ->havingRaw('COUNT(*) > 1')
+            ->get();
+        $dupCount = [];
+        foreach ($dupGroups as $g) {
+            $dupCount["{$g->clientId}|{$g->testType}|{$g->d}"] = (int) $g->n;
+        }
+        $onlyDuplicates = function ($q) use ($dupGroups) {
+            if ($dupGroups->isEmpty()) {
+                $q->whereRaw('1 = 0');
+                return;
+            }
+            $q->where(function ($w) use ($dupGroups) {
+                foreach ($dupGroups as $g) {
+                    $w->orWhere(fn ($x) => $x->where('clientId', $g->clientId)->where('testType', $g->testType)->whereDate('sampleDate', $g->d));
+                }
+            });
+        };
+
+        // Totals ignore the outcome / duplicate filters so the summary tiles stay clickable filters.
         $summary = (clone $base)
             ->selectRaw('resultSeverity, COUNT(*) as n')
             ->groupBy('resultSeverity')
             ->pluck('n', 'resultSeverity');
 
+        $severity = $request->query('severity');
         $rows = (clone $base)
-            ->when($request->query('severity'), fn ($q, $v) => $q->where('resultSeverity', $v))
+            ->when($severity === 'suspicious' || $severity === 'urgent' || $severity === 'abnormal', fn ($q) => $q->whereIn('resultSeverity', ['urgent', 'abnormal']))
+            ->when($severity === 'normal' || $severity === 'neutral', fn ($q) => $q->where('resultSeverity', $severity))
+            ->when($request->boolean('duplicates'), $onlyDuplicates)
             ->with(self::WITH_CLIENT)
+            // Duplicates are listed next to each other so they can be compared before deleting one.
+            ->when($request->boolean('duplicates'), fn ($q) => $q->orderBy('clientId')->orderBy('testType')->orderByDesc('sampleDate'))
             ->orderByDesc('resultDate')
+            ->orderBy('clientId')
             ->orderByDesc('sampleId')
             ->paginate(min((int) $request->query('perPage', 20), 500));
 
+        $items = collect($rows->items())->map(function ($s) use ($dupCount) {
+            $key = "{$s->clientId}|{$s->testType}|" . ($s->sampleDate ? $s->sampleDate->toDateString() : '');
+            $s->setAttribute('duplicateCount', $dupCount[$key] ?? 1);
+            return $s;
+        });
+
         return response()->json([
-            'results' => $rows->items(),
+            'results' => $items->values(),
             'total'   => $rows->total(),
             'page'    => $rows->currentPage(),
             'perPage' => $rows->perPage(),
             'summary' => [
-                'total'    => (int) $summary->sum(),
-                'normal'   => (int) ($summary['normal'] ?? 0),
-                'abnormal' => (int) ($summary['abnormal'] ?? 0),
-                'urgent'   => (int) ($summary['urgent'] ?? 0),
-                'neutral'  => (int) ($summary['neutral'] ?? 0),
+                'total'      => (int) $summary->sum(),
+                'normal'     => (int) ($summary['normal'] ?? 0),
+                'suspicious' => (int) ($summary['urgent'] ?? 0) + (int) ($summary['abnormal'] ?? 0),
+                'neutral'    => (int) ($summary['neutral'] ?? 0),
+                'duplicates' => (int) collect($dupCount)->sum(),
+                'duplicateGroups' => count($dupCount),
             ],
         ]);
     }
@@ -146,7 +187,7 @@ class ScreeningSampleController extends Controller
             'visitId'          => ['nullable', 'integer'],
         ]);
 
-        $sample = ScreeningSample::create([
+        $fields = [
             ...$data,
             'clientId'      => $client->clientId,
             'facilityId'    => $user->facilityId,
@@ -154,7 +195,19 @@ class ScreeningSampleController extends Controller
             'testType'      => $test['key'],
             'collectedById' => $user->id,
             'status'        => 'collected',
-        ]);
+        ];
+
+        // A booking for the same test is turned into the real record instead of creating a duplicate.
+        $booked = ScreeningSample::where('clientId', $client->clientId)
+            ->where('testType', $test['key'])->where('status', 'booked')
+            ->orderBy('sampleDate')->first();
+
+        if ($booked) {
+            $booked->update($fields);
+            $sample = $booked->fresh();
+        } else {
+            $sample = ScreeningSample::create($fields);
+        }
 
         $what = $test['kind'] === 'procedure' ? 'Test' : 'Sample';
 
@@ -164,6 +217,55 @@ class ScreeningSampleController extends Controller
             'message' => "{$what} recorded.",
             'sample'  => $sample->load(self::WITH_CLIENT),
         ], 201);
+    }
+
+    /**
+     * POST /clients/{clientId}/screening-samples/book — schedule a test for a later date.
+     * The booking is a screening_samples row with status "booked"; recording the test later (store above)
+     * converts it, and it is ignored by the HPV mirror until then.
+     */
+    public function book(Request $request, string $clientId): JsonResponse
+    {
+        $user = auth('api')->user();
+        $client = Client::where('clientId', $clientId)->firstOrFail();
+
+        if (!$user->canAccessFacility($client->facilityId)) {
+            abort(403, 'You cannot access this client');
+        }
+
+        $request->validate(['testType' => ['required', Rule::in(ScreeningTestCatalog::keys())]]);
+        $test = ScreeningTestCatalog::find($request->input('testType'));
+
+        $sex = $test['sex'] ?? 'any';
+        if ($sex !== 'any' && strtolower((string) $client->gender) !== $sex) {
+            return response()->json(['message' => "{$test['label']} is only booked for {$sex} clients."], 422);
+        }
+
+        $data = $request->validate([
+            'bookedFor' => ['required', 'date', 'after_or_equal:today'],
+            'facilityId' => ['required', 'integer', 'exists:facilities,facilityId'],
+            'notes'     => ['nullable', 'string', 'max:1000'],
+            'visitId'   => ['nullable', 'integer'],
+        ]);
+
+        if (ScreeningSample::where('clientId', $client->clientId)->where('testType', $test['key'])->where('status', 'booked')->exists()) {
+            return response()->json(['message' => "{$test['label']} is already booked for this client."], 422);
+        }
+
+        $sample = ScreeningSample::create([
+            'clientId'      => $client->clientId,
+            'visitId'       => $data['visitId'] ?? null,
+            'facilityId'    => $user->facilityId,
+            'cancerType'    => $test['cancerType'],
+            'testType'      => $test['key'],
+            'sampleDate'    => $data['bookedFor'],
+            'notes'         => $data['notes'] ?? null,
+            'collectedById' => $user->id,
+            'status'        => 'booked',
+            'bookedFacilityId' => $data['facilityId'],
+        ]);
+
+        return response()->json(['message' => 'Test booked.', 'sample' => $sample->load(self::WITH_CLIENT)], 201);
     }
 
     /**
@@ -253,6 +355,8 @@ class ScreeningSampleController extends Controller
             abort(403, 'You cannot access this sample');
         }
 
+        abort_if($sample->status === 'booked', 422, 'This test is only booked. Record the sample or test first.');
+
         $test = ScreeningTestCatalog::find($sample->testType);
         abort_if(!$test, 422, 'This test type is no longer configured.');
 
@@ -276,9 +380,13 @@ class ScreeningSampleController extends Controller
             'resultMeta'  => ['nullable', 'array'],
         ];
         foreach ($extraFields as $f) {
-            $r = [!empty($f['required']) ? 'required' : 'nullable'];
+            // A field shown only for some answers (showWhen) is required only when it is shown.
+            $shown = empty($f['showWhen'])
+                || in_array((string) $request->input("resultMeta.{$f['showWhen']['field']}"), $f['showWhen']['in'], true);
+            $r = [!empty($f['required']) && $shown ? 'required' : 'nullable'];
             if ($f['type'] === 'select') {
-                $r[] = Rule::in($f['options']);
+                // Options are either plain values or { value, label } pairs.
+                $r[] = Rule::in(array_map(fn ($o) => is_array($o) ? $o['value'] : $o, $f['options']));
             } elseif ($f['type'] === 'number') {
                 $r[] = 'numeric';
                 if (isset($f['min'])) $r[] = 'min:' . $f['min'];

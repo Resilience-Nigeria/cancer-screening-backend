@@ -31,10 +31,38 @@ class ScreenedClientController extends Controller
 
     private const SUSPICIOUS_OUTCOMES = ['suspicious', 'urgent_referral'];
 
+    /** Stored finding values that mean the same thing. Positive = suspicious, negative = non-suspicious. */
+    private const FINDING_VALUES = [
+        'suspicious'     => ['suspicious', 'positive'],
+        'non_suspicious' => ['non_suspicious', 'negative'],
+    ];
+
+    /** Lab severities that count as suspicious ("abnormal" is the old name). */
+    private const SUSPICIOUS_SEVERITIES = ['urgent', 'abnormal'];
+
+    private function normaliseFinding(?string $v): ?string
+    {
+        if ($v === null || $v === '') return null;
+        foreach (self::FINDING_VALUES as $finding => $values) {
+            if (in_array($v, $values, true)) return $finding;
+        }
+        return $v;
+    }
+
+    /** Finding from released lab results: suspicious beats non-suspicious beats inconclusive. */
+    private function findingFromLabs($samples): ?string
+    {
+        $released = $samples->where('status', 'result_released');
+        if ($released->isEmpty()) return $samples->where('status', 'collected')->isNotEmpty() ? 'awaiting' : null;
+        if ($released->whereIn('resultSeverity', self::SUSPICIOUS_SEVERITIES)->isNotEmpty()) return 'suspicious';
+        if ($released->where('resultSeverity', 'normal')->isNotEmpty()) return 'non_suspicious';
+        return 'inconclusive';
+    }
+
     /** Finding for one screening record: its own result, else the HPV result, else the visit's overall outcome. */
     private function findingFor($rec, $visit): ?string
     {
-        if (!empty($rec->screeningResult)) return $rec->screeningResult;
+        if (!empty($rec->screeningResult)) return $this->normaliseFinding($rec->screeningResult);
 
         $hpv = strtolower((string) ($rec->hpvResult ?? ''));
         if ($hpv !== '') {
@@ -59,7 +87,7 @@ class ScreenedClientController extends Controller
 
                     if (!empty($f['result'])) {
                         $x->where(function ($r) use ($rel, $f) {
-                            $r->whereHas($rel, fn ($m) => $m->where('screeningResult', $f['result']))
+                            $r->whereHas($rel, fn ($m) => $m->whereIn('screeningResult', self::FINDING_VALUES[$f['result']] ?? [$f['result']]))
                               ->orWhere(function ($y) use ($rel, $f) {
                                   $y->whereHas($rel, fn ($m) => $m->whereNull('screeningResult'));
                                   if ($f['result'] === 'suspicious') {
@@ -111,6 +139,11 @@ class ScreenedClientController extends Controller
                 $this->matchVisit($v, $use, $f);
             });
 
+            // A suspicious / non-suspicious lab result counts as that finding, as on the All Test Results page.
+            if (!empty($f['result']) && in_array($f['result'], ['suspicious', 'non_suspicious'], true)) {
+                $outer->orWhereIn('clientId', $this->labFindingClients($f['result'], $visible, $f));
+            }
+
             // A client with a lab test counts as screened even if the findings row is not saved yet.
             if (!$hasScreeningFilter) {
                 $outer->orWhereIn('clientId', ScreeningSample::query()->select('clientId')
@@ -143,20 +176,67 @@ class ScreenedClientController extends Controller
                 ->orWhere('hospitalNumber', 'like', "%{$search}%"));
         }
         if ($lab) {
-            $q->whereIn('clientId', $this->labClients($lab));
+            $q->whereIn('clientId', $this->labClients($lab, $visible, $rels));
         }
         return $q;
     }
 
-    private function labClients(string $lab)
+    /** Clients with a released lab result giving this finding (non-suspicious = no suspicious result). */
+    private function labFindingClients(string $finding, ?array $visible, array $f = [])
     {
+        $base = fn () => ScreeningSample::query()->select('clientId')
+            ->where('status', 'result_released')
+            ->when($visible !== null, fn ($x) => $x->whereIn('facilityId', $visible))
+            ->when(!empty($f['cancerType']), fn ($x) => $x->where('cancerType', $f['cancerType']))
+            ->when(!empty($f['facilityId']), fn ($x) => $x->where('facilityId', $f['facilityId']))
+            ->when(!empty($f['dateFrom']), fn ($x) => $x->whereDate('resultDate', '>=', $f['dateFrom']))
+            ->when(!empty($f['dateTo']), fn ($x) => $x->whereDate('resultDate', '<=', $f['dateTo']));
+
+        if ($finding === 'suspicious') {
+            return $base()->whereIn('resultSeverity', self::SUSPICIOUS_SEVERITIES);
+        }
+        return $base()->where('resultSeverity', 'normal')
+            ->whereNotIn('clientId', $base()->whereIn('resultSeverity', self::SUSPICIOUS_SEVERITIES));
+    }
+
+    /** Clients with two or more released results for the same test on the same sample date. */
+    private function duplicateClients(?array $visible)
+    {
+        return ScreeningSample::query()->select('clientId')
+            ->where('status', 'result_released')
+            ->when($visible !== null, fn ($x) => $x->whereIn('facilityId', $visible))
+            ->groupBy('clientId', 'testType', \Illuminate\Support\Facades\DB::raw('DATE(sampleDate)'))
+            ->havingRaw('COUNT(*) > 1');
+    }
+
+    /**
+     * Clients with a screening finding recorded on the clinical form for a cancer type, but no sample or
+     * test for that cancer type in the testing module (the result was typed in without a sample).
+     */
+    private function noSampleClients(?array $visible, array $rels)
+    {
+        $q = Client::query()->select('clientId')->when($visible !== null, fn ($c) => $c->whereIn('facilityId', $visible));
+        $q->where(function ($w) use ($rels) {
+            foreach ($rels as $type => $rel) {
+                $w->orWhere(function ($x) use ($type, $rel) {
+                    $x->whereHas("visits.{$rel}", fn ($m) => $m->whereNotNull('screeningResult'))
+                      ->whereNotIn('clientId', ScreeningSample::query()->select('clientId')->where('cancerType', $type));
+                });
+            }
+        });
+        return $q;
+    }
+
+    private function labClients(string $lab, ?array $visible = null, array $rels = [])
+    {
+        if ($lab === 'duplicates') return $this->duplicateClients($visible);
+        if ($lab === 'no_sample') return $this->noSampleClients($visible, $rels);
+
         $labQuery = ScreeningSample::query()->select('clientId');
         if ($lab === 'pending') {
             $labQuery->where('status', 'collected');
-        } elseif ($lab === 'urgent') {
-            $labQuery->where('status', 'result_released')->where('resultSeverity', 'urgent');
-        } elseif ($lab === 'abnormal') {
-            $labQuery->where('status', 'result_released')->whereIn('resultSeverity', ['abnormal', 'urgent']);
+        } elseif (in_array($lab, ['suspicious', 'urgent', 'abnormal'], true)) {
+            $labQuery->where('status', 'result_released')->whereIn('resultSeverity', self::SUSPICIOUS_SEVERITIES);
         }
         return $labQuery;
     }
@@ -284,7 +364,7 @@ class ScreenedClientController extends Controller
 
         $lab = $request->query('lab');
         if ($lab) {
-            $query->whereIn('clientId', $this->labClients($lab));
+            $query->whereIn('clientId', $this->labClients($lab, $visible, $rels));
         }
 
         $page = $query
@@ -326,9 +406,55 @@ class ScreenedClientController extends Controller
                         'cancerType'      => $type,
                         'screeningDate'   => $best['d'] ?: null,
                         'screeningResult' => $this->findingFor($best['rec'], $best['visit']),
+                        'source'          => 'screening',
+                        'hasResultOnForm' => !empty($best['rec']->screeningResult) || !empty($best['rec']->hpvResult),
+                        'hpvResult'       => $best['rec']->hpvResult ?? null,
                     ];
                 }
             }
+
+            $mine = $samples->get($c->clientId, collect());
+
+            // No finding on the form: use the lab results. Cancer types with lab tests but no screening
+            // record are listed too, so this page agrees with All Test Results.
+            foreach ($latest as &$entry) {
+                if ($entry['screeningResult'] === null) {
+                    $labFinding = $this->findingFromLabs($mine->where('cancerType', $entry['cancerType']));
+                    if ($labFinding) {
+                        $entry['screeningResult'] = $labFinding;
+                        $entry['source'] = 'lab';
+                    }
+                }
+            }
+            unset($entry);
+            $listed = collect($latest)->pluck('cancerType')->all();
+            foreach ($mine->groupBy('cancerType') as $type => $list) {
+                if (in_array($type, $listed, true)) continue;
+                $date = $list->map(fn ($sm) => substr((string) ($sm->resultDate ?: $sm->sampleDate), 0, 10))->filter()->sort()->last();
+                $latest[] = [
+                    'cancerType'      => $type,
+                    'screeningDate'   => $date,
+                    'screeningResult' => $this->findingFromLabs($list),
+                    'source'          => 'lab',
+                    'hasResultOnForm' => false,
+                    'hpvResult'       => null,
+                ];
+            }
+
+            // A result typed on the clinical form with no sample / test for that cancer type.
+            $missingSample = collect($latest)
+                ->filter(fn ($e) => $e['source'] === 'screening' && $e['hasResultOnForm'] && $mine->where('cancerType', $e['cancerType'])->isEmpty())
+                ->map(fn ($e) => [
+                    'cancerType' => $e['cancerType'],
+                    'note' => !empty($e['hpvResult'])
+                        ? 'An HPV result was entered on the screening form, but no HPV sample was recorded.'
+                        : 'A screening result was entered, but no sample or test was recorded in the testing module.',
+                ])->values();
+
+            // Possible duplicates: same test, same sample date, more than one released result.
+            $released = $mine->where('status', 'result_released');
+            $dupKeys = $released->groupBy(fn ($sm) => $sm->testType . '|' . substr((string) $sm->sampleDate, 0, 10))
+                ->filter(fn ($g) => $g->count() > 1)->keys()->all();
 
             // Where and by whom: the most recent visit, plus how many others.
             $latestVisit = $c->visits->sortByDesc('visitId')->first();
@@ -338,7 +464,6 @@ class ScreenedClientController extends Controller
             $screenerIds = $c->visits->pluck('createdBy')->filter()->unique();
             $screenerId = $latestVisit?->createdBy;
 
-            $mine = $samples->get($c->clientId, collect());
             $dates = collect($latest)->pluck('screeningDate')->filter()->sort()->values();
 
             return [
@@ -359,20 +484,32 @@ class ScreenedClientController extends Controller
                 'otherScreeners' => max($screenerIds->count() - 1, 0),
                 'lastScreeningDate' => $dates->last(),
                 'screenings'     => $latest,
-                'tests' => $mine->take(4)->map(fn ($sm) => [
+                'tests' => $mine->map(fn ($sm) => [
+                    'sampleId'   => $sm->sampleId,
+                    'sampleRef'  => $sm->sampleRef,
                     'testType'   => $sm->testType,
                     'cancerType' => $sm->cancerType,
                     'status'     => $sm->status,
                     'result'     => $sm->result,
-                    'severity'   => $sm->resultSeverity,
+                    'severity'   => in_array($sm->resultSeverity, self::SUSPICIOUS_SEVERITIES, true) ? 'urgent' : $sm->resultSeverity,
+                    'sampleDate' => $sm->sampleDate ? substr((string) $sm->sampleDate, 0, 10) : null,
                     'date'       => $sm->resultDate ? substr((string) $sm->resultDate, 0, 10) : ($sm->sampleDate ? substr((string) $sm->sampleDate, 0, 10) : null),
+                    'duplicate'  => $sm->status === 'result_released'
+                        && in_array($sm->testType . '|' . substr((string) $sm->sampleDate, 0, 10), $dupKeys, true),
                 ])->values(),
                 'labs' => [
-                    'pending'  => $mine->where('status', 'collected')->count(),
-                    'released' => $mine->where('status', 'result_released')->count(),
-                    'abnormal' => $mine->where('status', 'result_released')->where('resultSeverity', 'abnormal')->count(),
-                    'urgent'   => $mine->where('status', 'result_released')->where('resultSeverity', 'urgent')->count(),
+                    'pending'      => $mine->where('status', 'collected')->count(),
+                    'booked'       => $mine->where('status', 'booked')->count(),
+                    'released'     => $released->count(),
+                    'suspicious'   => $released->whereIn('resultSeverity', self::SUSPICIOUS_SEVERITIES)->count(),
+                    'normal'       => $released->where('resultSeverity', 'normal')->count(),
+                    'inconclusive' => $released->where('resultSeverity', 'neutral')->count(),
+                    'duplicates'   => $released->filter(fn ($sm) => in_array($sm->testType . '|' . substr((string) $sm->sampleDate, 0, 10), $dupKeys, true))->count(),
+                    // kept for older screens
+                    'urgent'       => $released->whereIn('resultSeverity', self::SUSPICIOUS_SEVERITIES)->count(),
+                    'abnormal'     => 0,
                 ],
+                'missingSample' => $missingSample,
             ];
         })->values();
 
@@ -380,7 +517,7 @@ class ScreenedClientController extends Controller
         $scope = fn ($q) => $q->when($visible !== null, fn ($x) => $x->whereIn('facilityId', $visible));
 
         return response()->json([
-            'version' => 'screened-clients-v6',
+            'version' => 'screened-clients-v7',
             'clients' => $rows,
             'total'   => $page->total(),
             'page'    => $page->currentPage(),
@@ -394,7 +531,9 @@ class ScreenedClientController extends Controller
                 'suspicious' => $this->screenedQuery($visible, $rels, ['result' => 'suspicious'])->count(),
                 'nonSuspicious' => $this->screenedQuery($visible, $rels, ['result' => 'non_suspicious'])->count(),
                 'awaiting'   => $scope(ScreeningSample::query())->where('status', 'collected')->distinct()->count('clientId'),
-                'urgentLabs' => $scope(ScreeningSample::query())->where('status', 'result_released')->where('resultSeverity', 'urgent')->distinct()->count('clientId'),
+                'urgentLabs' => $scope(ScreeningSample::query())->where('status', 'result_released')->whereIn('resultSeverity', self::SUSPICIOUS_SEVERITIES)->distinct()->count('clientId'),
+                'duplicates' => \Illuminate\Support\Facades\DB::query()->fromSub($this->duplicateClients($visible), 'd')->distinct()->count('clientId'),
+                'noSample'   => $this->noSampleClients($visible, $rels)->count(),
             ],
         ]);
     }

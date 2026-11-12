@@ -11,3 +11,5 @@ Artisan::command('inspire', function () {
 // Stage 4, Section 4.11 — daily follow-up reminders, missed-appointment
 // flagging, and overdue escalation.
 Schedule::command('followups:send-reminders')->daily();
+
+    Schedule::command('ncsr:overdue-results')->dailyAt('09:30')->timezone('Africa/Lagos');

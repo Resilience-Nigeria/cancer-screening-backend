@@ -29,6 +29,9 @@ use App\Http\Controllers\Api\QrCodeController;
 use App\Http\Controllers\Api\HpvSampleController;
 
 use App\Http\Controllers\Api\ScreeningSampleController;
+use App\Http\Controllers\Api\SampleDeletionController;
+use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\OverdueResultsController;
 
 use App\Http\Controllers\Api\ScreenedClientController;
 use App\Http\Controllers\Api\ReferredClientController;
@@ -145,8 +148,19 @@ Route::get('/hpv-samples', [HpvSampleController::class, 'index']);
 Route::post('/clients/{clientId}/hpv-samples', [HpvSampleController::class, 'store']);
 Route::patch('/hpv-samples/{id}/result', [HpvSampleController::class, 'recordResult']);
 
+// Deletion workflow (fixed paths first)
+Route::get('/screening-samples/overdue', [OverdueResultsController::class, 'index']);
+Route::get('/screening-samples/deletion-access', [SampleDeletionController::class, 'access']);
+Route::get('/screening-samples/deletion-requests', [SampleDeletionController::class, 'requests']);
+Route::post('/screening-samples/deletion-requests/{requestId}/decide', [SampleDeletionController::class, 'decide']);
+Route::get('/screening-samples/deleted', [SampleDeletionController::class, 'deleted']);
+Route::post('/screening-samples/{id}/deletion-request', [SampleDeletionController::class, 'requestDeletion']);
+Route::post('/screening-samples/{id}/restore', [SampleDeletionController::class, 'restore']);
+Route::delete('/screening-samples/{id}', [SampleDeletionController::class, 'destroy']);
+
 Route::get('/screening-samples', [ScreeningSampleController::class, 'index']);
 Route::post('/clients/{clientId}/screening-samples', [ScreeningSampleController::class, 'store']);
+Route::post('/clients/{clientId}/screening-samples/book', [ScreeningSampleController::class, 'book']);
 Route::patch('/screening-samples/{id}/result', [ScreeningSampleController::class, 'recordResult']);
 Route::get('/screening-samples/results', [ScreeningSampleController::class, 'results']);
 
@@ -159,6 +173,7 @@ Route::patch('/referred-clients/{referral}/status', [ClientReferralController::c
 
 
 Route::get('/screened-clients', [ScreenedClientController::class, 'index']);
+Route::get('/activity-logs', [ActivityLogController::class, 'index']);
 Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'syncFromVisit']);
 
     Route::get('/users/organizations', [UserController::class, 'getOrganizations']);
@@ -169,6 +184,8 @@ Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'sy
     Route::get('/clients/check-duplicate', [ClientController::class, 'checkDuplicate']);
     Route::get('/clients/linked', [ClientController::class, 'linked']);
     Route::get('/self-assessments', [SelfAssessmentController::class, 'index']);
+    Route::get('/clients/id-change-access', [ClientController::class, 'idChangeAccess']);
+    Route::patch('/clients/{clientId}/residence', [ClientController::class, 'changeResidence']);
     Route::get('/clients/{client}', [ClientController::class, 'show']);
     Route::patch('/clients/{client}', [ClientController::class, 'update']);
 
