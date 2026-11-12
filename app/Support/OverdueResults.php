@@ -20,9 +20,35 @@ class OverdueResults
                 || (method_exists($user, 'isHospitalAdminRole') && $user->isHospitalAdminRole()));
     }
 
+    /** Super admins and NICRAT admins see every facility. */
+    public static function isNational($user): bool
+    {
+        return $user && ($user->isSuperAdmin() || $user->isNicratStaff());
+    }
+
+    /**
+     * Facilities whose overdue results this user sees:
+     *  - Super Admin / NICRAT Admin: all (null = no limit)
+     *  - Hospital Admin: the facilities they can access
+     *  - everyone else (desk officers, nurses, ...): only their own facility
+     */
+    public static function facilitiesFor($user): ?array
+    {
+        if (self::isNational($user)) return null;
+        if (self::isAdmin($user)) return $user->visibleFacilityIds();
+        return $user->facilityId ? [(int) $user->facilityId] : [];
+    }
+
+    public static function scopeLabel($user): string
+    {
+        if (self::isNational($user)) return 'all';
+        if (self::isAdmin($user)) return 'facilities';
+        return 'facility';
+    }
+
     public static function forUser($user, int $days = self::DEFAULT_DAYS, int $limit = 50): array
     {
-        $visible = $user->visibleFacilityIds();
+        $visible = self::facilitiesFor($user);
         $cutoff = now()->subDays($days)->toDateString();
 
         $base = ScreeningSample::query()
@@ -65,6 +91,7 @@ class OverdueResults
             ])->values()->all();
 
         return [
+            'scope'      => self::scopeLabel($user),
             'days'       => $days,
             'total'      => $total,
             'byFacility' => $byFacility,

@@ -11,13 +11,12 @@ class OverdueResultsController extends Controller
 {
     /**
      * GET /screening-samples/overdue?days=7
-     * Samples / tests still waiting for a result after `days` days. Admins only; facility-scoped.
+     * Samples / tests still waiting for a result after `days` days, for any signed-in staff member:
+     * super / NICRAT admins see all facilities, hospital admins their facilities, everyone else their own facility.
      */
     public function index(Request $request): JsonResponse
     {
         $user = auth('api')->user();
-        abort_if(!OverdueResults::isAdmin($user), 403, 'Only admins receive overdue-result alerts.');
-
         $days = max(1, min((int) $request->query('days', OverdueResults::DEFAULT_DAYS), 90));
 
         return response()->json(OverdueResults::forUser($user, $days));
