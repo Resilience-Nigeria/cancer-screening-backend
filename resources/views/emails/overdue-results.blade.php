@@ -3,21 +3,15 @@
 <body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;">
 @php
-  // Logos: embedded when sent by Laravel's mailer, linked from APP_URL when sent through the Brevo API.
-  // Replace the two files to change them:
-  //   public/images/email/nicrat-logo.png   and   public/images/email/resilience-logo.png
-  
-   $nicratLogo = 'https://ncsr.nicrat.gov.ng/assets/img/NCSR.svg';
-   $resilienceLogo = 'https://ncsr.nicrat.gov.ng/assets/img/resilience.png';
-
-
+  // Logos are loaded from these public URLs (works for both the Brevo API and Laravel's mailer).
+  // Use PNG or JPG: most email apps (Gmail, Outlook) do not display SVG images.
+  $nicratLogo = 'https://ncsr.nicrat.gov.ng/assets/img/NCSR.png';
+  $resilienceLogo = 'https://ncsr.nicrat.gov.ng/assets/img/resilience.png';
 @endphp
     <tr>
       <td align="center" style="background:#ffffff;padding:20px 24px 12px;">
-        @if (isset($message) && file_exists($nicratLogo))
-          <img src="{{ $message->embed($nicratLogo) }}" alt="NICRAT" height="64" style="display:block;height:64px;width:auto;border:0;">
-        @elseif (!empty($logoBase) && file_exists($nicratLogo))
-          <img src="{{ $logoBase }}/images/email/nicrat-logo.png" alt="NICRAT" height="64" style="display:block;height:64px;width:auto;border:0;">
+        @if (!empty($nicratLogo))
+          <img src="{{ $nicratLogo }}" alt="NICRAT" height="64" style="display:block;height:64px;width:auto;max-width:240px;border:0;">
         @else
           <div style="font-size:18px;font-weight:bold;color:#166534;">NICRAT</div>
         @endif
@@ -84,10 +78,8 @@
     <tr>
       <td align="center" style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 24px;">
         <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">Powered by</div>
-        @if (isset($message) && file_exists($resilienceLogo))
-          <img src="{{ $message->embed($resilienceLogo) }}" alt="Resilience Nigeria" height="36" style="display:inline-block;height:36px;width:auto;border:0;">
-        @elseif (!empty($logoBase) && file_exists($resilienceLogo))
-          <img src="{{ $logoBase }}/images/email/resilience-logo.png" alt="Resilience Nigeria" height="36" style="display:inline-block;height:36px;width:auto;border:0;">
+        @if (!empty($resilienceLogo))
+          <img src="{{ $resilienceLogo }}" alt="Resilience Nigeria" height="36" style="display:inline-block;height:36px;width:auto;max-width:200px;border:0;">
         @else
           <div style="font-size:13px;font-weight:bold;color:#374151;">Resilience Nigeria</div>
         @endif
