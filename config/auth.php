@@ -45,6 +45,11 @@ return [
             'driver' => 'jwt',
             'provider' => 'users',
         ],
+
+        'bloom' => [                          // <-- add
+        'driver'   => 'jwt',
+        'provider' => 'bloom_accounts',
+    ],
     ],
 
     /*
@@ -69,6 +74,11 @@ return [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
         ],
+
+        'bloom_accounts' => [             // <-- add
+        'driver' => 'eloquent',
+        'model'  => App\Models\BloomAccount::class,
+    ],
 
         // 'users' => [
         //     'driver' => 'database',

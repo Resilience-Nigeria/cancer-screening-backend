@@ -37,8 +37,10 @@ use App\Http\Controllers\Api\ScreenedClientController;
 use App\Http\Controllers\Api\ReferredClientController;
 
 
-
 use Illuminate\Support\Facades\Route;
+
+require __DIR__ . '/bloom.php';
+
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
