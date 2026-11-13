@@ -8,7 +8,9 @@ use App\Support\Bloom\CentrePresenter;
 use App\Support\Bloom\Geo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Public "Find a centre" endpoints for the Bloom app (no sign-in needed, so
@@ -24,7 +26,7 @@ class CentreController extends Controller
      *   state          exact state filter
      *   type           screening | treatment | all   (default config)
      *   open_now       1 = only centres that are open right now
-     *   limit          1-50 (default 20)
+     *   limit          1-200 (default 20)
      */
     public function index(Request $request): JsonResponse
     {
@@ -47,48 +49,61 @@ class CentreController extends Controller
         $tz     = new \DateTimeZone((string) config('bloom.centres.timezone'));
         $now    = new \DateTimeImmutable('now', $tz);
 
-        $query = $this->baseQuery($type);
+        $build = function (bool $withinRadius) use ($v, $type, $hasPos, $radius, $request, $now) {
+            $query = $this->baseQuery($type);
 
-        if (!empty($v['state'])) {
-            $query->whereRaw('LOWER(TRIM(facilityState)) = ?', [mb_strtolower(trim($v['state']))]);
-        }
-
-        if (!empty($v['q'])) {
-            $like = '%' . addcslashes(trim($v['q']), '%_\\') . '%';
-            $query->where(function ($w) use ($like) {
-                $w->where('facilityName', 'like', $like)
-                  ->orWhere('facilityAddress', 'like', $like)
-                  ->orWhere('facilityLga', 'like', $like)
-                  ->orWhere('facilityState', 'like', $like);
-            });
-        }
-
-        if ($hasPos) {
-            $box = Geo::boundingBox((float) $v['lat'], (float) $v['lng'], $radius);
-            $query->whereBetween('latitude', [$box['minLat'], $box['maxLat']])
-                  ->whereBetween('longitude', [$box['minLng'], $box['maxLng']]);
-        }
-
-        $facilities = $query->get();
-        $this->loadServices($facilities);
-
-        $rows = [];
-        foreach ($facilities as $f) {
-            $km = $hasPos
-                ? Geo::distanceKm((float) $v['lat'], (float) $v['lng'], (float) $f->latitude, (float) $f->longitude)
-                : null;
-
-            if ($km !== null && $km > $radius) {
-                continue;                                   // inside the square, outside the circle
+            if (!empty($v['state'])) {
+                $query->whereRaw('LOWER(TRIM(facilityState)) = ?', [mb_strtolower(trim($v['state']))]);
             }
 
-            $row = CentrePresenter::toArray($f, $km, $now);
-
-            if ($request->boolean('open_now') && $row['openNow'] !== true) {
-                continue;
+            if (!empty($v['q'])) {
+                $like = '%' . addcslashes(trim($v['q']), '%_\\') . '%';
+                $query->where(function ($w) use ($like) {
+                    $w->where('facilityName', 'like', $like)
+                      ->orWhere('facilityAddress', 'like', $like)
+                      ->orWhere('facilityLga', 'like', $like)
+                      ->orWhere('facilityState', 'like', $like);
+                });
             }
 
-            $rows[] = $row;
+            if ($hasPos && $withinRadius) {
+                $box = Geo::boundingBox((float) $v['lat'], (float) $v['lng'], $radius);
+                $query->whereBetween('latitude', [$box['minLat'], $box['maxLat']])
+                      ->whereBetween('longitude', [$box['minLng'], $box['maxLng']]);
+            }
+
+            $facilities = $query->get();
+            $services   = $this->serviceNames($facilities->pluck('facilityId')->all());
+
+            $rows = [];
+            foreach ($facilities as $f) {
+                $km = $hasPos
+                    ? Geo::distanceKm((float) $v['lat'], (float) $v['lng'], (float) $f->latitude, (float) $f->longitude)
+                    : null;
+
+                if ($withinRadius && $km !== null && $km > $radius) {
+                    continue;                               // inside the square, outside the circle
+                }
+
+                $row = CentrePresenter::toArray($f, $km, $now, $services[$f->facilityId] ?? null);
+
+                if ($request->boolean('open_now') && $row['openNow'] !== true) {
+                    continue;
+                }
+
+                $rows[] = $row;
+            }
+
+            return $rows;
+        };
+
+        $rows     = $build(true);
+        $expanded = false;
+
+        // Nobody listed within the radius: show the nearest centres anywhere instead of an empty screen.
+        if ($hasPos && $rows === [] && empty($v['q'])) {
+            $rows     = $build(false);
+            $expanded = $rows !== [];
         }
 
         usort($rows, $hasPos
@@ -104,6 +119,7 @@ class CentreController extends Controller
                 'total'     => $total,
                 'returned'  => min($total, $limit),
                 'radius_km' => $hasPos ? $radius : null,
+                'expanded'  => $expanded,   // true = nothing within radius_km, these are the nearest anywhere
                 'origin'    => $hasPos ? ['lat' => (float) $v['lat'], 'lng' => (float) $v['lng']] : null,
             ],
         ]);
@@ -118,10 +134,10 @@ class CentreController extends Controller
             return response()->json(['status' => false, 'code' => 'NOT_FOUND', 'message' => 'Centre not found.'], 404);
         }
 
-        $this->loadServices(collect([$facility]));
+        $services = $this->serviceNames([$facility->facilityId]);
         $now = new \DateTimeImmutable('now', new \DateTimeZone((string) config('bloom.centres.timezone')));
 
-        return response()->json(['status' => true, 'data' => CentrePresenter::toArray($facility, null, $now)]);
+        return response()->json(['status' => true, 'data' => CentrePresenter::toArray($facility, null, $now, $services[$facility->facilityId] ?? null)]);
     }
 
     /** Active facilities, with coordinates unless $needCoords is false. */
@@ -148,17 +164,48 @@ class CentreController extends Controller
         return $query;
     }
 
-    /** One extra query for all service names. A problem here must never break the list. */
-    private function loadServices($facilities): void
+    /**
+     * Service names per facility, read straight from the pivot table so it does not
+     * depend on the Facility::services() relation (whose table name differs between
+     * installs). A problem here must never break the list: it just returns [].
+     *
+     * @param  array<int,int|string> $facilityIds
+     * @return array<int,array<int,string>>  facilityId => [service names]
+     */
+    private function serviceNames(array $facilityIds): array
     {
-        if (!config('bloom.centres.include_services') || $facilities->isEmpty()) {
-            return;
+        if (!config('bloom.centres.include_services') || $facilityIds === []) {
+            return [];
         }
 
         try {
-            $facilities->load('services');
+            $pivot = collect(config('bloom.centres.pivot_tables'))
+                ->first(fn ($t) => Schema::hasTable($t));
+
+            if (!$pivot || !Schema::hasTable('services')) {
+                return [];
+            }
+
+            $rows = DB::table($pivot)
+                ->join('services', 'services.serviceId', '=', $pivot . '.serviceId')
+                ->whereIn($pivot . '.facilityId', $facilityIds)
+                ->when(Schema::hasColumn($pivot, 'isActive'), fn ($q) => $q->where($pivot . '.isActive', 1))
+                ->select($pivot . '.facilityId as fid', 'services.*')
+                ->get();
+
+            $out = [];
+            foreach ($rows as $row) {
+                $attrs = (array) $row;
+                $name  = $attrs['serviceName'] ?? $attrs['name'] ?? $attrs['slug'] ?? null;
+                if (is_string($name) && trim($name) !== '') {
+                    $out[(int) $attrs['fid']][] = trim($name);
+                }
+            }
+
+            return $out;
         } catch (\Throwable $e) {
             Log::warning('Bloom centres: could not load services', ['error' => $e->getMessage()]);
+            return [];
         }
     }
 }

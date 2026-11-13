@@ -13,11 +13,14 @@ class BloomMailService
 {
     public function sendCode(string $email, ?string $name, string $code, string $purpose, int $ttlMinutes): bool
     {
-        $apiKey = env('BREVO_API_KEY');
-        $from   = config('mail.from.address') ?: env('MAIL_FROM_ADDRESS');
+        $apiKey = config('bloom.mail.api_key');
+        $from   = config('bloom.mail.from_address') ?: config('mail.from.address');
 
         if (!$apiKey || !$from) {
-            Log::error('Bloom email not sent: BREVO_API_KEY or MAIL_FROM_ADDRESS is missing');
+            Log::error('Bloom email not sent: missing ' . implode(' and ', array_filter([
+                $apiKey ? null : 'BREVO_API_KEY',
+                $from ? null : 'MAIL_FROM_ADDRESS',
+            ])) . '. If they are in .env, run: php artisan config:clear');
             return false;
         }
 
@@ -43,7 +46,7 @@ HTML;
                 ->acceptJson()
                 ->post('https://api.brevo.com/v3/smtp/email', [
                     'to'          => [['email' => $email, 'name' => $name ?: $email]],
-                    'sender'      => ['name' => env('MAIL_FROM_NAME', 'Bloom'), 'email' => $from],
+                    'sender'      => ['name' => config('bloom.mail.from_name') ?: 'Bloom', 'email' => $from],
                     'subject'     => $subject,
                     'htmlContent' => $html,
                 ]);
@@ -56,6 +59,42 @@ HTML;
             return true;
         } catch (\Throwable $e) {
             Log::error('Bloom email exception', ['error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /** A short plain message (e.g. "your health worker account is approved"). Paragraphs are escaped. */
+    public function sendNotice(string $email, ?string $name, string $subject, array $paragraphs): bool
+    {
+        $apiKey = config('bloom.mail.api_key');
+        $from   = config('bloom.mail.from_address') ?: config('mail.from.address');
+        if (!$apiKey || !$from) {
+            Log::error('Bloom email not sent: BREVO_API_KEY or MAIL_FROM_ADDRESS missing (php artisan config:clear if they are in .env)');
+            return false;
+        }
+
+        $hello = e($name ? "Hi {$name}," : 'Hi,');
+        $body  = implode('', array_map(fn ($p) => '<p>' . e($p) . '</p>', $paragraphs));
+        $html  = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1F1B3D">'
+            . '<h2 style="margin:0 0 16px;color:#159E96">Bloom</h2><p>' . $hello . '</p>' . $body . '</div>';
+
+        try {
+            $response = Http::withHeaders(['api-key' => $apiKey, 'content-type' => 'application/json'])
+                ->acceptJson()
+                ->post('https://api.brevo.com/v3/smtp/email', [
+                    'to'          => [['email' => $email, 'name' => $name ?: $email]],
+                    'sender'      => ['name' => config('bloom.mail.from_name') ?: 'Bloom', 'email' => $from],
+                    'subject'     => $subject,
+                    'htmlContent' => $html,
+                ]);
+            if (!$response->successful()) {
+                Log::error('Bloom notice email failed', ['status' => $response->status(), 'body' => $response->body()]);
+                return false;
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('Bloom notice email exception', ['error' => $e->getMessage()]);
             return false;
         }
     }

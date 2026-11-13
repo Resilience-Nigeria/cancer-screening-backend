@@ -154,19 +154,16 @@ class AuthController extends Controller
     /** POST /bloom/auth/login */
     public function login(Request $request): JsonResponse
     {
-        $this->normalizePhoneInput($request);
-
-        $data = $request->validate([
-            'phone'    => $this->phoneRules(),
+        $data = $request->validate(array_merge($this->loginRules(), [
             'password' => ['required', 'string', 'max:200'],
-        ], $this->phoneMessages());
+        ]));
 
-        $account = BloomAccount::where('phone', $data['phone'])->first();
+        $account = $this->findByLogin($this->loginIdentifier($data));
 
         $passwordOk = Hash::check($data['password'], $account?->password ?? self::DUMMY_HASH);
 
         if (!$account || !$passwordOk) {
-            return $this->fail('INVALID_CREDENTIALS', 'Wrong phone number or password.', 401);
+            return $this->fail('INVALID_CREDENTIALS', 'Wrong email, phone number or password.', 401);
         }
 
         if (!$account->isActive()) {
@@ -196,10 +193,9 @@ class AuthController extends Controller
     /** POST /bloom/auth/forgot */
     public function forgot(Request $request): JsonResponse
     {
-        $this->normalizePhoneInput($request);
-        $data = $request->validate(['phone' => $this->phoneRules()], $this->phoneMessages());
+        $data = $request->validate($this->loginRules());
 
-        $account = BloomAccount::where('phone', $data['phone'])->first();
+        $account = $this->findByLogin($this->loginIdentifier($data));
         $debug   = null;
 
         if ($account && $account->isActive() && $account->isVerified()) {
@@ -214,7 +210,7 @@ class AuthController extends Controller
         return response()->json(array_filter([
             'status'         => true,
             'code'           => 'OTP_SENT',
-            'message'        => 'If that number has a Bloom account, we emailed its owner a reset code.',
+            'message'        => 'If that account exists, we emailed its owner a reset code.',
             'otp_expires_in' => (int) config('bloom.otp.ttl_minutes') * 60,
             'debug_code'     => $debug,
         ], fn ($v) => $v !== null));
@@ -223,15 +219,12 @@ class AuthController extends Controller
     /** POST /bloom/auth/reset */
     public function reset(Request $request): JsonResponse
     {
-        $this->normalizePhoneInput($request);
-
-        $data = $request->validate([
-            'phone'    => $this->phoneRules(),
+        $data = $request->validate(array_merge($this->loginRules(), [
             'code'     => ['required', 'digits:' . (int) config('bloom.otp.length')],
             'password' => $this->passwordRules(),
-        ], $this->phoneMessages());
+        ]));
 
-        $account = BloomAccount::where('phone', $data['phone'])->first();
+        $account = $this->findByLogin($this->loginIdentifier($data));
 
         $outcome = ($account && $account->isActive() && $account->isVerified())
             ? $this->otp->check($account->phone, BloomOtpService::PURPOSE_RESET, $data['code'])

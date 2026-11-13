@@ -23,7 +23,7 @@ class AppointmentController extends Controller
         $rows = BloomAppointmentRequest::with('facility')
             ->where('account_id', $this->account()->id)
             ->latest('id')
-            ->limit(50)
+            ->limit(100)
             ->get();
 
         return response()->json(['status' => true, 'data' => $rows->map(fn ($r) => $this->present($r))->values()]);
@@ -69,6 +69,9 @@ class AppointmentController extends Controller
             'status'         => 'pending',
         ]);
 
+        // Every booking becomes a case for a community health worker at that facility.
+        \App\Services\Bloom\BloomCaseService::openFor($appt);
+
         return response()->json([
             'status'  => true,
             'message' => 'Request sent.',
@@ -89,8 +92,54 @@ class AppointmentController extends Controller
         }
 
         $row->update(['status' => 'cancelled']);
+        \App\Services\Bloom\BloomCaseService::closeIfWithdrawn($row);
 
         return response()->json(['status' => true, 'message' => 'Request cancelled.', 'data' => $this->present($row->load('facility'))]);
+    }
+
+    /** PATCH /bloom/appointments/{id}  (reschedule: a confirmed slot goes back to pending for re-confirmation) */
+    public function reschedule(Request $request, int $id): JsonResponse
+    {
+        $row = BloomAppointmentRequest::where('account_id', $this->account()->id)->find($id);
+
+        if (!$row) {
+            return $this->fail('NOT_FOUND', 'Request not found.', 404);
+        }
+        if (!in_array($row->status, ['pending', 'confirmed'], true)) {
+            return $this->fail('NOT_RESCHEDULABLE', 'This request can no longer be changed.', 422);
+        }
+
+        $maxDays = (int) config('bloom.appointments.max_days_ahead');
+        $data = $request->validate([
+            'preferred_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', 'before_or_equal:' . now()->addDays($maxDays)->toDateString()],
+            'preferred_time' => ['nullable', 'date_format:H:i'],
+            'note'           => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $clash = BloomAppointmentRequest::where('account_id', $row->account_id)
+            ->where('facility_id', $row->facility_id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where('id', '!=', $row->id)
+            ->whereDate('preferred_date', $data['preferred_date'])
+            ->exists();
+        if ($clash) {
+            return $this->fail('DUPLICATE_REQUEST', 'You already asked this centre for that day.', 422);
+        }
+
+        $row->update([
+            'preferred_date'   => $data['preferred_date'],
+            'preferred_time'   => $data['preferred_time'] ?? null,
+            'note'             => array_key_exists('note', $data) ? ($data['note'] !== null ? trim($data['note']) : null) : $row->note,
+            'status'           => 'pending',
+            'confirmed_date'   => null,
+            'confirmed_time'   => null,
+            'staff_note'       => null,
+            'decided_by'       => null,
+            'decided_at'       => null,
+            'reschedule_count' => min(255, $row->reschedule_count + 1),
+        ]);
+
+        return response()->json(['status' => true, 'message' => 'Request updated.', 'data' => $this->present($row->load('facility'))]);
     }
 
     private function present(BloomAppointmentRequest $r): array
@@ -104,6 +153,10 @@ class AppointmentController extends Controller
             'date'     => $r->preferred_date->toDateString(),
             'time'     => $r->preferred_time,
             'note'     => $r->note,
+            'confirmedDate' => optional($r->confirmed_date)->toDateString(),
+            'confirmedTime' => $r->confirmed_time,
+            'staffNote'     => $r->staff_note,
+            'decidedAt'     => optional($r->decided_at)->toIso8601String(),
             'centre'   => $f ? [
                 'id'      => (int) $f->facilityId,
                 'name'    => $f->facilityName,
@@ -111,6 +164,7 @@ class AppointmentController extends Controller
                 'phone'   => $f->phoneNumber ?: null,
             ] : null,
             'createdAt' => optional($r->created_at)->toIso8601String(),
+            'updatedAt' => optional($r->updated_at)->toIso8601String(),
         ];
     }
 }

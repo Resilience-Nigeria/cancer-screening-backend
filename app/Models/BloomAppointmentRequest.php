@@ -11,11 +11,14 @@ class BloomAppointmentRequest extends Model
 
     protected $fillable = [
         'account_id', 'facility_id', 'type', 'preferred_date',
-        'preferred_time', 'note', 'status',
+        'preferred_time', 'note', 'status', 'confirmed_date', 'confirmed_time',
+        'staff_note', 'decided_by', 'decided_at', 'reschedule_count',
     ];
 
     protected $casts = [
         'preferred_date' => 'date',
+        'confirmed_date' => 'date',
+        'decided_at'     => 'datetime',
     ];
 
     public function account(): BelongsTo

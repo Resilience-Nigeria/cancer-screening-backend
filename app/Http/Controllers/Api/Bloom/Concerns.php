@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Small helpers shared by the Bloom controllers.
@@ -35,6 +36,39 @@ trait Concerns
     protected function maskedEmail(?string $email): ?string
     {
         return $email ? BloomMailService::mask($email) : null;
+    }
+
+    /** Rules for the sign-in identifier: `login` (email or phone). `phone` is still accepted. */
+    protected function loginRules(): array
+    {
+        return [
+            'login' => ['required_without:phone', 'nullable', 'string', 'max:150'],
+            'phone' => ['required_without:login', 'nullable', 'string', 'max:150'],
+        ];
+    }
+
+    /** The email or phone the person typed, validated and trimmed. */
+    protected function loginIdentifier(array $data): string
+    {
+        $id = trim((string) ($data['login'] ?? $data['phone'] ?? ''));
+
+        $valid = str_contains($id, '@')
+            ? filter_var($id, FILTER_VALIDATE_EMAIL) !== false
+            : NigerianPhone::normalize($id) !== null;
+
+        if (!$valid) {
+            throw ValidationException::withMessages(['login' => ['Enter your email or a valid Nigerian phone number.']]);
+        }
+
+        return $id;
+    }
+
+    /** Finds the account by email (when it has an @) or by phone. */
+    protected function findByLogin(string $identifier): ?BloomAccount
+    {
+        return str_contains($identifier, '@')
+            ? BloomAccount::where('email', mb_strtolower($identifier))->first()
+            : BloomAccount::where('phone', NigerianPhone::normalize($identifier))->first();
     }
 
     protected function phoneRules(): array
