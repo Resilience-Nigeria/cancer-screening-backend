@@ -3,119 +3,99 @@
 namespace App\Console\Commands;
 
 use App\Mail\OverdueResultsReminder;
-use App\Support\BrevoApiMailer;
 use App\Models\ActivityLog;
-use App\Models\User;
+use App\Models\ReportSetting;
+use App\Support\BrevoApiMailer;
 use App\Support\OverdueResults;
+use App\Support\ReportMailer;
+use App\Support\ReportRecipients;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Mail;
 
 /**
- * Emails every active staff member the samples / tests waiting for a result for more than N days (default 7):
- * super / NICRAT admins get all facilities, hospital admins their facilities, everyone else their own facility.
+ * Emails the samples / tests waiting for a result for more than N days to the people on the
+ * overdue_results list (Report Settings). Each person gets only the facilities their entry covers.
  * Nobody with nothing overdue gets an email.
  *
  *   php artisan ncsr:overdue-results            (send)
  *   php artisan ncsr:overdue-results --dry-run  (list who would get what, send nothing)
- *   php artisan ncsr:overdue-results --pause=3  (seconds between emails; default 2, for mail plans with a rate limit)
- *   php artisan ncsr:overdue-results --via=smtp (use Laravel's mailer instead of the Brevo API)
- *   php artisan ncsr:overdue-results --only=you@example.com  (send only to this one user, for testing)
+ *   php artisan ncsr:overdue-results --days=10  (override the number of days set in Report Settings)
+ *   php artisan ncsr:overdue-results --only=you@example.com
+ *   php artisan ncsr:overdue-results --via=smtp
  */
 class SendOverdueResultsReminders extends Command
 {
-    protected $signature = 'ncsr:overdue-results {--days=7} {--dry-run} {--pause=2 : Seconds to wait between emails} {--via=brevo : brevo (HTTP API, default) or smtp} {--only= : Send only to this email address}';
+    protected $signature = 'ncsr:overdue-results {--days= : Days before a result counts as overdue (default: Report Settings, 7)} {--dry-run} {--pause=2 : Seconds to wait between emails} {--via=brevo : brevo (HTTP API, default) or smtp} {--only= : Send only to this email address}';
     protected $description = 'Email staff about screening test results that are overdue';
 
     public function handle(): int
     {
-        $days = max(1, (int) $this->option('days'));
-        $link = rtrim((string) (config('app.frontend_url') ?: env('FRONTEND_URL', config('app.url'))), '/')
-            . '/ncsr/screening-tests-page?tab=results';
+        $setting = ReportSetting::for('overdue_results');
+        $days = max(1, (int) ($this->option('days') ?: $setting->option('days', OverdueResults::DEFAULT_DAYS)));
+        $link = ReportMailer::frontendUrl('/ncsr/screening-tests-page?tab=results');
 
-        // Every active user with an email; each one only gets the facilities they are responsible for.
-        $admins = User::with('user_role')->get()->filter(function ($u) {
-            $status = strtolower((string) ($u->status ?? 'active'));
-            return !empty($u->email) && !in_array($status, ['inactive', 'disabled', 'suspended'], true);
-        });
-
+        $recipients = ReportRecipients::resolve('overdue_results');
         $only = strtolower(trim((string) $this->option('only')));
         if ($only !== '') {
-            $admins = $admins->filter(fn ($u) => strtolower($u->email) === $only);
-            if ($admins->isEmpty()) {
-                $this->error("No active user with the email {$only}.");
+            $recipients = array_filter($recipients, fn ($r, $k) => $k === $only, ARRAY_FILTER_USE_BOTH);
+            if (!$recipients) {
+                $this->error("{$only} is not on the overdue reminder list (Report Settings).");
                 return self::FAILURE;
             }
         }
+        if (!$recipients) {
+            $this->warn('Nobody is on the overdue reminder list. Add recipients under Report Settings.');
+            return self::SUCCESS;
+        }
 
         $via = strtolower((string) $this->option('via')) === 'smtp' ? 'smtp' : 'brevo';
-        if ($via === 'brevo' && !BrevoApiMailer::apiKey()) {
+        if ($via === 'brevo' && !BrevoApiMailer::apiKey() && !$this->option('dry-run')) {
             $this->error('Brevo API key not found (services.brevo.api_key / BREVO_API_KEY). Use --via=smtp or set the key.');
             return self::FAILURE;
         }
-        // Logos are linked from the backend's public folder when sending through the API.
-        $logoBase = rtrim((string) config('app.url'), '/');
 
+        $cache = [];
         $sent = 0;
         $failed = 0;
         $pause = max(0, (float) $this->option('pause'));
         $first = true;
-        foreach ($admins as $admin) {
-            $data = OverdueResults::forUser($admin, $days);
+
+        foreach ($recipients as $r) {
+            $key = $r['facilities'] === null ? 'all' : implode(',', collect($r['facilities'])->sort()->all());
+            $scope = $r['facilities'] === null ? 'all' : (count($r['facilities']) === 1 ? 'facility' : 'facilities');
+            $cache[$key] ??= OverdueResults::forFacilities($r['facilities'], $scope, $days);
+            $data = $cache[$key];
             if ($data['total'] === 0) continue;
 
-            $name = trim(($admin->firstName ?? '') . ' ' . ($admin->lastName ?? '')) ?: $admin->email;
-            $this->line("{$admin->email}: {$data['total']} overdue");
-
+            $this->line("{$r['email']}: {$data['total']} overdue");
             if ($this->option('dry-run')) continue;
 
-            // Space the emails out so mail services with a per-second limit don't reject them.
             if (!$first && $pause > 0) usleep((int) ($pause * 1_000_000));
             $first = false;
 
-            // A rate-limit rejection is retried up to 3 times, waiting longer each time.
-            $ok = false;
-            for ($attempt = 1; $attempt <= 4 && !$ok; $attempt++) {
-                try {
-                    if ($via === 'brevo') {
-                        $mailable = new OverdueResultsReminder($name, $data, $link);
-                        $html = view('emails.overdue-results', [
-                            'recipientName' => $name,
-                            'data'          => $data,
-                            'link'          => $link,
-                            'logoBase'      => $logoBase,
-                        ])->render();
-                        BrevoApiMailer::send($admin->email, $name, $mailable->envelope()->subject, $html);
-                    } else {
-                        Mail::to($admin->email)->send(new OverdueResultsReminder($name, $data, $link));
-                    }
-                    $ok = true;
-                    $sent++;
-                } catch (\Throwable $e) {
-                    $rateLimited = $e->getCode() === 429
-                        || str_contains($e->getMessage(), 'Too many emails')
-                        || str_contains($e->getMessage(), ' 550 ')
-                        || str_contains(strtolower($e->getMessage()), 'rate');
-                    if ($rateLimited && $attempt < 4) {
-                        $wait = 5 * $attempt;
-                        $this->warn("{$admin->email}: mail server busy, retrying in {$wait}s…");
-                        sleep($wait);
-                        continue;
-                    }
-                    report($e);
-                    $failed++;
-                    $this->error("Could not email {$admin->email}: {$e->getMessage()}");
-                    break;
-                }
+            $subject = (new OverdueResultsReminder($r['name'], $data, $link))->envelope()->subject;
+            $html = view('emails.overdue-results', [
+                'recipientName' => $r['name'],
+                'data' => $data,
+                'link' => $link,
+                'logoBase' => rtrim((string) config('app.url'), '/'),
+            ])->render();
+
+            $res = ReportMailer::send($r['email'], $r['name'], $subject, $html, $via, fn ($w) => $this->warn("{$r['email']}: mail server busy, retrying in {$w}s…"));
+            if ($res === true) {
+                $sent++;
+            } else {
+                $failed++;
+                $this->error("Could not email {$r['email']}: {$res}");
             }
         }
 
         if ($sent > 0 && class_exists(ActivityLog::class)) {
-            ActivityLog::record('overdue_results_reminder', "Overdue-result reminder emailed to {$sent} staff member(s).", [
-                'details' => ['days' => $days, 'recipients' => $sent],
+            ActivityLog::record('overdue_results_reminder', "Overdue-result reminder emailed to {$sent} recipient(s).", [
+                'details' => ['days' => $days, 'recipients' => $sent, 'failed' => $failed],
             ]);
         }
 
-        $this->line("Sent through: " . ($via === 'brevo' ? 'Brevo API' : 'SMTP (' . config('mail.mailers.smtp.host') . ')'));
+        $this->line('Sent through: ' . ($via === 'brevo' ? 'Brevo API' : 'SMTP (' . config('mail.mailers.smtp.host') . ')'));
         $this->info($this->option('dry-run') ? 'Dry run: nothing sent.' : "Sent {$sent} reminder(s)" . ($failed ? ", {$failed} failed." : '.'));
         return self::SUCCESS;
     }

@@ -8,6 +8,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use App\Support\ClientFindings;
+use Illuminate\Support\Facades\Schema;
 
 class CancerAnalyticsController extends Controller
 {
@@ -15,16 +17,111 @@ class CancerAnalyticsController extends Controller
      * Age classification ranges
      */
     private const AGE_GROUPS = [
-        'infancy' => ['label' => 'Infancy', 'min' => 0, 'max' => 1, 'description' => '0-12 months'],
+        // Ranges must not overlap: before, 10-11 year olds fell into "Middle & Late Childhood" and
+        // 15-19 into "Adolescents" only by list order, and 1-year-olds were counted as infants.
+        'infancy' => ['label' => 'Infancy', 'min' => 0, 'max' => 0, 'description' => '0-12 months'],
         'early_childhood' => ['label' => 'Early Childhood', 'min' => 1, 'max' => 5, 'description' => '1-5 years'],
-        'middle_late_childhood' => ['label' => 'Middle & Late Childhood', 'min' => 6, 'max' => 11, 'description' => '6-11 years'],
+        'middle_late_childhood' => ['label' => 'Middle & Late Childhood', 'min' => 6, 'max' => 9, 'description' => '6-9 years'],
         'adolescents' => ['label' => 'Adolescents', 'min' => 10, 'max' => 19, 'description' => '10-19 years'],
-        'youth' => ['label' => 'Youth', 'min' => 15, 'max' => 24, 'description' => '15-24 years'],
+        'youth' => ['label' => 'Youth', 'min' => 20, 'max' => 24, 'description' => '20-24 years'],
         'young_adults' => ['label' => 'Young Adults', 'min' => 25, 'max' => 44, 'description' => '25-44 years'],
         'middle_age' => ['label' => 'Middle Age', 'min' => 45, 'max' => 59, 'description' => '45-59 years'],
         'elderly' => ['label' => 'Elderly', 'min' => 60, 'max' => 74, 'description' => '60-74 years'],
-        'senior' => ['label' => 'Senior', 'min' => 75, 'max' => 120, 'description' => '75+ years'],
+        'senior' => ['label' => 'Senior', 'min' => 75, 'max' => 150, 'description' => '75+ years'],
     ];
+
+    /**
+     * Facility limit for this request: null = every facility. Facility and date filters apply to national
+     * users; everyone else is limited to the facilities they can see.
+     * Returns [facilities|null, dateFrom|null, dateTo|null].
+     */
+    private function scope(Request $request): array
+    {
+        $user = Auth::user();
+        if (!$this->hasNationalAccess($user)) {
+            return [$user->visibleFacilityIds() ?? [], null, null];
+        }
+        $facilities = $request->filled('facilityId') && $request->facilityId !== 'all' ? [$request->facilityId] : null;
+        return [$facilities, $request->filled('dateFrom') ? $request->dateFrom : null, $request->filled('dateTo') ? $request->dateTo : null];
+    }
+
+    private static function typeLabel(?string $t): string
+    {
+        $t = trim((string) $t);
+        return $t === '' ? 'Not specified' : ucwords(str_replace('_', ' ', strtolower($t)));
+    }
+
+    /**
+     * Cases to analyse, one row per client:
+     *   basis=suspicious (default) — clients with a suspicious finding (ClientFindings: screening forms, visit
+     *       outcome and lab results, the same rule as Screened Clients). Age is taken at the first screening.
+     *   basis=confirmed — clients whose case outcome says cancer is confirmed. Age at diagnosis.
+     * Row: clientId, cancerTypes[], gender, age|null, stage|null
+     */
+    private function caseRows(string $basis, ?array $facilities, ?string $from, ?string $to): array
+    {
+        $rows = [];
+        if ($basis === 'confirmed') {
+            $list = DB::table('case_outcomes')
+                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
+                ->where('case_outcomes.cancerConfirmed', 'yes')
+                ->when($facilities !== null, fn ($q) => $q->whereIn('clients.facilityId', $facilities))
+                ->when($from, fn ($q) => $q->whereDate('case_outcomes.diagnosisDate', '>=', $from))
+                ->when($to, fn ($q) => $q->whereDate('case_outcomes.diagnosisDate', '<=', $to))
+                ->select('clients.clientId', 'clients.dateOfBirth', 'clients.gender', 'case_outcomes.cancerType',
+                         'case_outcomes.cancerStage', 'case_outcomes.diagnosisDate')
+                ->get();
+            foreach ($list as $c) {
+                $rows[$c->clientId] = [
+                    'clientId' => $c->clientId,
+                    'cancerTypes' => [self::typeLabel($c->cancerType)],
+                    'gender' => $c->gender,
+                    'age' => $this->ageAt($c->dateOfBirth, $c->diagnosisDate),
+                    'stage' => $c->cancerStage,
+                ];
+            }
+            return array_values($rows);
+        }
+
+        $findings = ClientFindings::build($facilities, $from, $to);
+        $suspicious = array_filter($findings, fn ($c) => ClientFindings::isSuspicious($c));
+        if (!$suspicious) return [];
+
+        $ids = array_keys($suspicious);
+        $clients = collect();
+        $stages = collect();
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            $clients = $clients->merge(DB::table('clients')->whereIn('clientId', $chunk)->get(['clientId', 'dateOfBirth', 'gender'])->keyBy('clientId'));
+            if (Schema::hasTable('case_outcomes')) {
+                $stages = $stages->merge(DB::table('case_outcomes')->whereIn('clientId', $chunk)->whereNotNull('cancerStage')->pluck('cancerStage', 'clientId'));
+            }
+        }
+        foreach ($suspicious as $id => $f) {
+            $types = array_keys(array_filter($f['types'], fn ($v) => $v === 'suspicious'));
+            $c = $clients[$id] ?? null;
+            $rows[] = [
+                'clientId' => $id,
+                'cancerTypes' => $types ? array_map([self::class, 'typeLabel'], $types) : ['Not specified'],
+                'gender' => $c->gender ?? null,
+                'age' => $c ? $this->ageAt($c->dateOfBirth, $f['firstDate']) : null,
+                'stage' => $stages[$id] ?? null,
+            ];
+        }
+        return $rows;
+    }
+
+    /** Whole years between date of birth and the given date (today if none). */
+    private function ageAt($dateOfBirth, $onDate = null): ?int
+    {
+        if (!$dateOfBirth) return null;
+        try {
+            $at = $onDate ? Carbon::parse($onDate) : now();
+            $dob = Carbon::parse($dateOfBirth);
+            return $dob->gt($at) ? null : (int) $dob->diffInYears($at);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
 
     /**
      * Check if user has national access — delegates entirely to the
@@ -60,109 +157,62 @@ class CancerAnalyticsController extends Controller
     }
 
     /**
-     * Get cancer types by age classification
+     * Cancer types by age classification.
+     * ?basis=suspicious (default) | confirmed  &facilityId= &dateFrom= &dateTo=
+     * Each client is counted once per age group; a client suspicious for two cancer types counts under both types.
      */
     public function getCancerByAgeClassification(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-            $hasNationalAccess = $this->hasNationalAccess($user);
+            [$facilities, $from, $to] = $this->scope($request);
+            $basis = $request->query('basis') === 'confirmed' ? 'confirmed' : 'suspicious';
+            $cases = $this->caseRows($basis, $facilities, $from, $to);
 
-            // Build query for positive cancer cases
-            $query = DB::table('case_outcomes')
-                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
-                ->where('case_outcomes.screeningResult', 'positive')
-                ->whereNotNull('case_outcomes.cancerType')
-                ->whereNotNull('clients.dateOfBirth')
-                ->select([
-                    'case_outcomes.cancerType',
-                    'clients.dateOfBirth',
-                    'clients.gender',
-                    'case_outcomes.cancerStage',
-                    'case_outcomes.diagnosisDate',
-                ]);
-
-            // Apply RBAC filters
-            if (!$hasNationalAccess) {
-                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
-            } else {
-                if ($request->has('facilityId') && $request->facilityId !== 'all') {
-                    $query->where('clients.facilityId', $request->facilityId);
-                }
-                if ($request->has('dateFrom') && $request->dateFrom) {
-                    $query->whereDate('case_outcomes.diagnosisDate', '>=', $request->dateFrom);
-                }
-                if ($request->has('dateTo') && $request->dateTo) {
-                    $query->whereDate('case_outcomes.diagnosisDate', '<=', $request->dateTo);
-                }
-            }
-
-            $cases = $query->get();
-
-            // Group by age classification and cancer type
             $ageGroupData = [];
             $cancerTypeStats = [];
             $totalCases = 0;
+            $unknownAge = 0;
 
             foreach ($cases as $case) {
-                $age = $this->calculateAge($case->dateOfBirth);
-                $ageGroup = $this->getAgeClassification($age);
-                
-                if (!$ageGroup) continue;
-
-                $cancerType = $case->cancerType;
+                $ageGroup = $case['age'] === null ? null : $this->getAgeClassification($case['age']);
+                foreach ($case['cancerTypes'] as $t) {
+                    $cancerTypeStats[$t] = ($cancerTypeStats[$t] ?? 0) + 1;
+                }
                 $totalCases++;
-
-                // Initialize age group if not exists
-                if (!isset($ageGroupData[$ageGroup])) {
-                    $ageGroupData[$ageGroup] = [
-                        'label' => self::AGE_GROUPS[$ageGroup]['label'],
-                        'description' => self::AGE_GROUPS[$ageGroup]['description'],
-                        'total' => 0,
-                        'cancerTypes' => [],
-                        'genderBreakdown' => ['male' => 0, 'female' => 0, 'other' => 0],
-                        'stageBreakdown' => [],
-                    ];
+                if (!$ageGroup) {
+                    $unknownAge++;
+                    continue;
                 }
 
-                // Increment counts
-                $ageGroupData[$ageGroup]['total']++;
-                
-                // Cancer type breakdown
-                if (!isset($ageGroupData[$ageGroup]['cancerTypes'][$cancerType])) {
-                    $ageGroupData[$ageGroup]['cancerTypes'][$cancerType] = 0;
+                $g = &$ageGroupData[$ageGroup];
+                $g ??= [
+                    'label' => self::AGE_GROUPS[$ageGroup]['label'],
+                    'description' => self::AGE_GROUPS[$ageGroup]['description'],
+                    'total' => 0,
+                    'cancerTypes' => [],
+                    'genderBreakdown' => ['male' => 0, 'female' => 0, 'other' => 0],
+                    'stageBreakdown' => [],
+                ];
+                $g['total']++;
+                foreach ($case['cancerTypes'] as $t) {
+                    $g['cancerTypes'][$t] = ($g['cancerTypes'][$t] ?? 0) + 1;
                 }
-                $ageGroupData[$ageGroup]['cancerTypes'][$cancerType]++;
-
-                // Gender breakdown
-                $gender = strtolower($case->gender ?? 'other');
-                if (!isset($ageGroupData[$ageGroup]['genderBreakdown'][$gender])) {
-                    $ageGroupData[$ageGroup]['genderBreakdown'][$gender] = 0;
+                $gender = strtolower((string) $case['gender']);
+                $gender = in_array($gender, ['male', 'female'], true) ? $gender : 'other';
+                $g['genderBreakdown'][$gender]++;
+                if ($case['stage']) {
+                    $stage = str_replace(['stage_', 'Stage '], '', (string) $case['stage']);
+                    $g['stageBreakdown'][$stage] = ($g['stageBreakdown'][$stage] ?? 0) + 1;
                 }
-                $ageGroupData[$ageGroup]['genderBreakdown'][$gender]++;
-
-                // Stage breakdown
-                if ($case->cancerStage) {
-                    if (!isset($ageGroupData[$ageGroup]['stageBreakdown'][$case->cancerStage])) {
-                        $ageGroupData[$ageGroup]['stageBreakdown'][$case->cancerStage] = 0;
-                    }
-                    $ageGroupData[$ageGroup]['stageBreakdown'][$case->cancerStage]++;
-                }
-
-                // Overall cancer type stats
-                if (!isset($cancerTypeStats[$cancerType])) {
-                    $cancerTypeStats[$cancerType] = 0;
-                }
-                $cancerTypeStats[$cancerType]++;
+                unset($g);
             }
 
-            // Sort cancer types by count within each age group
             foreach ($ageGroupData as &$group) {
                 arsort($group['cancerTypes']);
-                arsort($group['stageBreakdown']);
+                ksort($group['stageBreakdown']);
             }
+            unset($group);
 
-            // Sort age groups by order
             $orderedAgeGroups = [];
             foreach (self::AGE_GROUPS as $key => $value) {
                 if (isset($ageGroupData[$key])) {
@@ -173,9 +223,11 @@ class CancerAnalyticsController extends Controller
             return response()->json([
                 'status' => true,
                 'data' => [
+                    'basis' => $basis,
                     'ageGroups' => $orderedAgeGroups,
                     'cancerTypeStats' => $cancerTypeStats,
                     'totalCases' => $totalCases,
+                    'unknownAge' => $unknownAge,
                     'summary' => [
                         'mostAffectedAgeGroup' => $this->getMostAffectedAgeGroup($orderedAgeGroups),
                         'topCancerTypes' => $this->getTopCancerTypes($cancerTypeStats, 5),
@@ -225,67 +277,33 @@ class CancerAnalyticsController extends Controller
     }
 
     /**
-     * Get detailed age distribution for a specific cancer type
+     * Age distribution for one cancer type (?basis=suspicious|confirmed, same cases as cancer-by-age).
      */
     public function getCancerTypeAgeDistribution(Request $request, string $cancerType): JsonResponse
     {
         try {
-            $user = Auth::user();
-            $hasNationalAccess = $this->hasNationalAccess($user);
-
-            $query = DB::table('case_outcomes')
-                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
-                ->where('case_outcomes.screeningResult', 'positive')
-                ->where('case_outcomes.cancerType', $cancerType)
-                ->whereNotNull('clients.dateOfBirth')
-                ->select([
-                    'clients.dateOfBirth',
-                    'clients.gender',
-                    'case_outcomes.cancerStage',
-                    'case_outcomes.diagnosisDate',
-                ]);
-
-            // Apply RBAC
-            if (!$hasNationalAccess) {
-                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
-            } else {
-                if ($request->has('facilityId') && $request->facilityId !== 'all') {
-                    $query->where('clients.facilityId', $request->facilityId);
-                }
-            }
-
-            $cases = $query->get();
+            [$facilities, $from, $to] = $this->scope($request);
+            $basis = $request->query('basis') === 'confirmed' ? 'confirmed' : 'suspicious';
+            $label = self::typeLabel($cancerType);
 
             $ageDistribution = [];
-            foreach ($cases as $case) {
-                $age = $this->calculateAge($case->dateOfBirth);
-                $ageGroup = $this->getAgeClassification($age);
-                
+            foreach ($this->caseRows($basis, $facilities, $from, $to) as $case) {
+                if (!in_array($label, $case['cancerTypes'], true)) continue;
+                $ageGroup = $case['age'] === null ? null : $this->getAgeClassification($case['age']);
                 if (!$ageGroup) continue;
-
-                if (!isset($ageDistribution[$ageGroup])) {
-                    $ageDistribution[$ageGroup] = [
-                        'label' => self::AGE_GROUPS[$ageGroup]['label'],
-                        'count' => 0,
-                        'percentage' => 0,
-                    ];
-                }
+                $ageDistribution[$ageGroup] ??= ['label' => self::AGE_GROUPS[$ageGroup]['label'], 'count' => 0, 'percentage' => 0];
                 $ageDistribution[$ageGroup]['count']++;
             }
 
-            // Calculate percentages
             $total = array_sum(array_column($ageDistribution, 'count'));
             foreach ($ageDistribution as &$group) {
                 $group['percentage'] = $total > 0 ? round(($group['count'] / $total) * 100, 1) : 0;
             }
+            unset($group);
 
             return response()->json([
                 'status' => true,
-                'data' => [
-                    'cancerType' => $cancerType,
-                    'distribution' => $ageDistribution,
-                    'totalCases' => $total,
-                ]
+                'data' => ['cancerType' => $cancerType, 'basis' => $basis, 'distribution' => $ageDistribution, 'totalCases' => $total],
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -297,50 +315,29 @@ class CancerAnalyticsController extends Controller
     }
 
     /**
-     * Get gender comparison across age groups
+     * Gender comparison across age groups — same cases, basis and filters as cancer-by-age.
      */
     public function getGenderAgeComparison(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-            $hasNationalAccess = $this->hasNationalAccess($user);
-
-            $query = DB::table('case_outcomes')
-                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
-                ->where('case_outcomes.screeningResult', 'positive')
-                ->whereNotNull('clients.dateOfBirth')
-                ->select(['clients.dateOfBirth', 'clients.gender']);
-
-            if (!$hasNationalAccess) {
-                $query->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []);
-            }
-
-            $cases = $query->get();
+            [$facilities, $from, $to] = $this->scope($request);
+            $basis = $request->query('basis') === 'confirmed' ? 'confirmed' : 'suspicious';
 
             $genderAgeData = [];
-            foreach ($cases as $case) {
-                $age = $this->calculateAge($case->dateOfBirth);
-                $ageGroup = $this->getAgeClassification($age);
-                $gender = strtolower($case->gender ?? 'other');
-                
+            foreach ($this->caseRows($basis, $facilities, $from, $to) as $case) {
+                $ageGroup = $case['age'] === null ? null : $this->getAgeClassification($case['age']);
                 if (!$ageGroup) continue;
-
-                if (!isset($genderAgeData[$ageGroup])) {
-                    $genderAgeData[$ageGroup] = [
-                        'label' => self::AGE_GROUPS[$ageGroup]['label'],
-                        'male' => 0,
-                        'female' => 0,
-                        'other' => 0,
-                    ];
-                }
-
-                $genderAgeData[$ageGroup][$gender]++;
+                $genderAgeData[$ageGroup] ??= ['label' => self::AGE_GROUPS[$ageGroup]['label'], 'male' => 0, 'female' => 0, 'other' => 0];
+                $gender = strtolower((string) $case['gender']);
+                $genderAgeData[$ageGroup][in_array($gender, ['male', 'female'], true) ? $gender : 'other']++;
             }
 
-            return response()->json([
-                'status' => true,
-                'data' => $genderAgeData
-            ]);
+            $ordered = [];
+            foreach (array_keys(self::AGE_GROUPS) as $key) {
+                if (isset($genderAgeData[$key])) $ordered[$key] = $genderAgeData[$key];
+            }
+
+            return response()->json(['status' => true, 'data' => $ordered]);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
@@ -351,59 +348,13 @@ class CancerAnalyticsController extends Controller
     }
 
     /**
-     * Stage 2 (Clinical Screening / PHC) overall outcome distribution —
-     * normal / low_suspicion / suspicious / urgent_referral. Nothing
-     * else aggregates this field; it's separate from the older
-     * case_outcomes-based treatment/clinical outcome statistics.
+     * Stage 2 results. The old version counted only visits with a saved overall outcome, which missed
+     * suspicious results recorded on the screening forms and in the lab. Now the same client-level
+     * summary as /analytics/stage2-summary.
      */
     public function getStage2OutcomeDistribution(Request $request): JsonResponse
     {
-        try {
-            $user = Auth::user();
-            $hasNationalAccess = $this->hasNationalAccess($user);
-
-            $query = DB::table('screening_visits')
-                ->whereNotNull('overallOutcome');
-
-            if (!$hasNationalAccess) {
-                $query->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
-            } elseif ($request->has('facilityId') && $request->facilityId !== 'all') {
-                $query->where('facilityId', $request->facilityId);
-            }
-
-            if ($request->filled('dateFrom')) {
-                $query->whereDate('visitDate', '>=', $request->dateFrom);
-            }
-            if ($request->filled('dateTo')) {
-                $query->whereDate('visitDate', '<=', $request->dateTo);
-            }
-
-            $counts = $query
-                ->select('overallOutcome', DB::raw('count(*) as total'))
-                ->groupBy('overallOutcome')
-                ->pluck('total', 'overallOutcome');
-
-            $distribution = [
-                'normal' => (int) ($counts['normal'] ?? 0),
-                'low_suspicion' => (int) ($counts['low_suspicion'] ?? 0),
-                'suspicious' => (int) ($counts['suspicious'] ?? 0),
-                'urgent_referral' => (int) ($counts['urgent_referral'] ?? 0),
-            ];
-
-            return response()->json([
-                'status' => true,
-                'data' => [
-                    'distribution' => $distribution,
-                    'total' => array_sum($distribution),
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unable to fetch Stage 2 outcome distribution',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        return app(DashboardController::class)->getStage2Summary($request);
     }
 
     /**
@@ -546,174 +497,123 @@ class CancerAnalyticsController extends Controller
     }
 
     /**
-     * Facility-level performance comparison — screenings, referrals, and
-     * flagged (suspicious/urgent) Stage 2 outcomes per facility.
+     * Facility performance — now the same as /analytics/facility-summary (clients screened, suspicious,
+     * referred, awaiting/overdue lab), with the old field names kept for older screens.
      */
     public function getFacilityPerformance(Request $request): JsonResponse
     {
-        try {
-            $user = Auth::user();
-            $hasNationalAccess = $this->hasNationalAccess($user);
-
-            $screeningsQuery = DB::table('screening_visits')
-                ->join('facilities', 'screening_visits.facilityId', '=', 'facilities.facilityId')
-                ->select('facilities.facilityId', 'facilities.facilityName', DB::raw('count(*) as screeningsCount'));
-
-            if (!$hasNationalAccess) {
-                $screeningsQuery->whereIn('facilities.facilityId', $user->visibleFacilityIds() ?? []);
-            } elseif ($request->filled('facilityId') && $request->facilityId !== 'all') {
-                $screeningsQuery->where('facilities.facilityId', $request->facilityId);
-            }
-            if ($request->filled('dateFrom')) {
-                $screeningsQuery->whereDate('screening_visits.visitDate', '>=', $request->dateFrom);
-            }
-            if ($request->filled('dateTo')) {
-                $screeningsQuery->whereDate('screening_visits.visitDate', '<=', $request->dateTo);
-            }
-
-            $screenings = $screeningsQuery
-                ->groupBy('facilities.facilityId', 'facilities.facilityName')
-                ->get()
-                ->keyBy('facilityId');
-
-            $referralsQuery = DB::table('client_referrals')
-                ->join('facilities', 'client_referrals.fromFacilityId', '=', 'facilities.facilityId')
-                ->select('facilities.facilityId', DB::raw('count(*) as referralsCount'));
-            if (!$hasNationalAccess) {
-                $referralsQuery->whereIn('facilities.facilityId', $user->visibleFacilityIds() ?? []);
-            }
-            $referrals = $referralsQuery->groupBy('facilities.facilityId')->get()->keyBy('facilityId');
-
-            $flaggedQuery = DB::table('screening_visits')
-                ->whereIn('overallOutcome', ['suspicious', 'urgent_referral'])
-                ->select('facilityId', DB::raw('count(*) as flaggedCount'));
-            if (!$hasNationalAccess) {
-                $flaggedQuery->whereIn('facilityId', $user->visibleFacilityIds() ?? []);
-            }
-            $flagged = $flaggedQuery->groupBy('facilityId')->get()->keyBy('facilityId');
-
-            $result = $screenings->map(function ($row) use ($referrals, $flagged) {
-                $facilityId = $row->facilityId;
-                return [
-                    'facilityId' => $facilityId,
-                    'facilityName' => $row->facilityName,
-                    'screeningsCount' => (int) $row->screeningsCount,
-                    'referralsCount' => (int) ($referrals[$facilityId]->referralsCount ?? 0),
-                    'flaggedCount' => (int) ($flagged[$facilityId]->flaggedCount ?? 0),
-                ];
-            })->sortByDesc('screeningsCount')->values();
-
-            return response()->json(['status' => true, 'data' => $result]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unable to fetch facility performance',
-                'error' => $e->getMessage(),
-            ], 500);
+        $res = app(DashboardController::class)->getFacilitySummary($request);
+        $payload = $res->getData(true);
+        if (!empty($payload['status'])) {
+            $payload['data'] = array_map(fn ($r) => $r + [
+                'screeningsCount' => $r['screened'],
+                'referralsCount' => $r['referred'],
+                'flaggedCount' => $r['suspicious'],
+            ], $payload['data']);
         }
+        return response()->json($payload, $res->getStatusCode());
     }
 
     /**
-     * Referral / patient journey funnel: Registered -> Screened -> Referred
-     * -> Confirmed -> Treated, with conversion rate between each stage.
+     * Patient journey funnel — now the same cohort funnel as /analytics/journey-funnel.
      */
     public function getReferralFunnel(Request $request): JsonResponse
     {
-        try {
-            $user = Auth::user();
-            $hasNationalAccess = $this->hasNationalAccess($user);
-
-            $scope = function ($query, string $column) use ($hasNationalAccess, $user, $request) {
-                if (!$hasNationalAccess) {
-                    $query->where($column, $user->facilityId);
-                } elseif ($request->filled('facilityId') && $request->facilityId !== 'all') {
-                    $query->where($column, $request->facilityId);
-                }
-                return $query;
-            };
-
-            $registeredQuery = DB::table('clients');
-            $registered = $scope($registeredQuery, 'facilityId')->count();
-
-            $screenedQuery = DB::table('screening_visits');
-            $screened = $scope($screenedQuery, 'facilityId')->distinct()->count('clientId');
-
-            $referredQuery = DB::table('client_referrals');
-            $referred = $scope($referredQuery, 'fromFacilityId')->distinct()->count('clientId');
-
-            $confirmedQuery = DB::table('case_outcomes')
-                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
-                ->where('case_outcomes.cancerConfirmed', 'yes');
-            $confirmed = $scope($confirmedQuery, 'clients.facilityId')->count();
-
-            $treatedQuery = DB::table('case_outcomes')
-                ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
-                ->where('case_outcomes.treatmentCommenced', 'yes');
-            $treated = $scope($treatedQuery, 'clients.facilityId')->count();
-
-            $stages = [
-                ['key' => 'registered', 'label' => 'Registered', 'count' => $registered],
-                ['key' => 'screened', 'label' => 'Screened', 'count' => $screened],
-                ['key' => 'referred', 'label' => 'Referred', 'count' => $referred],
-                ['key' => 'confirmed', 'label' => 'Confirmed', 'count' => $confirmed],
-                ['key' => 'treated', 'label' => 'Treated', 'count' => $treated],
-            ];
-
-            foreach ($stages as $i => &$stage) {
-                $stage['conversionFromPrevious'] = $i === 0
-                    ? null
-                    : ($stages[$i - 1]['count'] > 0 ? round(($stage['count'] / $stages[$i - 1]['count']) * 100, 1) : 0.0);
-            }
-            unset($stage);
-
-            return response()->json(['status' => true, 'data' => $stages]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unable to fetch referral funnel',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        return app(DashboardController::class)->getJourneyFunnel($request);
     }
 
     /**
-     * Average days between key journey milestones. This is a starting
-     * baseline (registration->screening, registration->referral,
-     * diagnosis->treatment) — thresholds for what counts as "on time" vs
-     * "delayed" should be reviewed against NICRAT's actual protocol targets.
+     * Average and median days between journey milestones, per client:
+     *   registration -> first screening (form or lab sample)
+     *   registration -> first referral (referral record)
+     *   first sample -> released result (lab turnaround, per sample)
+     *   diagnosis -> treatment start (case outcomes)
+     * Negative gaps (dates entered out of order) are left out and counted in `skipped`.
+     * Before: every visit (follow-ups included) was averaged, negatives were kept and no filters applied.
      */
     public function getTimingMetrics(Request $request): JsonResponse
     {
         try {
-            $user = Auth::user();
-            $hasNationalAccess = $this->hasNationalAccess($user);
+            [$facilities, $from, $to] = $this->scope($request);
 
-            $regToScreen = DB::table('clients')
-                ->join('screening_visits', 'clients.clientId', '=', 'screening_visits.clientId')
-                ->when(!$hasNationalAccess, fn ($q) => $q->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []))
-                ->selectRaw('AVG(DATEDIFF(screening_visits.visitDate, clients.registrationDate)) as avgDays')
-                ->first();
+            $stat = function (array $days) {
+                $valid = array_values(array_filter($days, fn ($d) => $d !== null && $d >= 0));
+                sort($valid);
+                $n = count($valid);
+                return [
+                    'avg' => $n ? round(array_sum($valid) / $n, 1) : null,
+                    'median' => $n ? ($n % 2 ? $valid[intdiv($n, 2)] : round(($valid[$n / 2 - 1] + $valid[$n / 2]) / 2, 1)) : null,
+                    'count' => $n,
+                    'skipped' => count(array_filter($days, fn ($d) => $d !== null && $d < 0)),
+                ];
+            };
+            $diff = fn ($a, $b) => ($a && $b) ? (int) floor((strtotime(substr($b, 0, 10)) - strtotime(substr($a, 0, 10))) / 86400) : null;
 
-            $regToReferral = DB::table('client_referrals')
+            // Registration -> first screening
+            $findings = ClientFindings::build($facilities, $from, $to);
+            $screenedIds = ClientFindings::screenedIds($findings);
+            $regDates = collect();
+            foreach (array_chunk($screenedIds, 1000) as $chunk) {
+                $regDates = $regDates->merge(DB::table('clients')->whereIn('clientId', $chunk)->pluck('registrationDate', 'clientId'));
+            }
+            $regToScreen = [];
+            foreach ($screenedIds as $id) {
+                $regToScreen[] = $diff($regDates[$id] ?? null, $findings[$id]['firstDate']);
+            }
+
+            // Registration -> first referral record
+            $firstRef = DB::table('client_referrals')
                 ->join('clients', 'client_referrals.clientId', '=', 'clients.clientId')
-                ->when(!$hasNationalAccess, fn ($q) => $q->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []))
-                ->selectRaw('AVG(DATEDIFF(client_referrals.referralDate, clients.registrationDate)) as avgDays')
-                ->first();
+                ->when($facilities !== null, fn ($q) => $q->where(fn ($w) => $w->whereIn('client_referrals.fromFacilityId', $facilities)
+                    ->orWhere(fn ($x) => $x->whereNull('client_referrals.fromFacilityId')->whereIn('clients.facilityId', $facilities))))
+                ->when($from, fn ($q) => $q->whereDate('client_referrals.referralDate', '>=', $from))
+                ->when($to, fn ($q) => $q->whereDate('client_referrals.referralDate', '<=', $to))
+                ->groupBy('clients.clientId', 'clients.registrationDate')
+                ->selectRaw('clients.registrationDate as reg, MIN(client_referrals.referralDate) as ref')
+                ->get();
+            $regToRef = $firstRef->map(fn ($r) => $diff($r->reg, $r->ref))->all();
 
-            $diagnosisToTreatment = DB::table('case_outcomes')
+            // Sample -> released result
+            $hasDeletedAt = Schema::hasColumn('screening_samples', 'deletedAt');
+            $turn = DB::table('screening_samples')
+                ->when($hasDeletedAt, fn ($q) => $q->whereNull('deletedAt'))
+                ->where('status', 'result_released')
+                ->whereNotNull('resultDate')
+                ->when($facilities !== null, fn ($q) => $q->whereIn('facilityId', $facilities))
+                ->when($from, fn ($q) => $q->whereDate('sampleDate', '>=', $from))
+                ->when($to, fn ($q) => $q->whereDate('sampleDate', '<=', $to))
+                ->get(['sampleDate', 'resultDate'])
+                ->map(fn ($r) => $diff($r->sampleDate, $r->resultDate))->all();
+
+            // Diagnosis -> treatment start
+            $dx = DB::table('case_outcomes')
                 ->join('clients', 'case_outcomes.clientId', '=', 'clients.clientId')
-                ->whereNotNull('diagnosisDate')
-                ->whereNotNull('treatmentCommencementDate')
-                ->when(!$hasNationalAccess, fn ($q) => $q->whereIn('clients.facilityId', $user->visibleFacilityIds() ?? []))
-                ->selectRaw('AVG(DATEDIFF(treatmentCommencementDate, diagnosisDate)) as avgDays')
-                ->first();
+                ->whereNotNull('case_outcomes.diagnosisDate')
+                ->whereNotNull('case_outcomes.treatmentCommencementDate')
+                ->when($facilities !== null, fn ($q) => $q->whereIn('clients.facilityId', $facilities))
+                ->when($from, fn ($q) => $q->whereDate('case_outcomes.diagnosisDate', '>=', $from))
+                ->when($to, fn ($q) => $q->whereDate('case_outcomes.diagnosisDate', '<=', $to))
+                ->get(['case_outcomes.diagnosisDate', 'case_outcomes.treatmentCommencementDate'])
+                ->map(fn ($r) => $diff($r->diagnosisDate, $r->treatmentCommencementDate))->all();
+
+            $s1 = $stat($regToScreen);
+            $s2 = $stat($regToRef);
+            $s3 = $stat($turn);
+            $s4 = $stat($dx);
 
             return response()->json([
                 'status' => true,
                 'data' => [
-                    'registrationToScreeningDays' => round((float) ($regToScreen->avgDays ?? 0), 1),
-                    'registrationToReferralDays' => round((float) ($regToReferral->avgDays ?? 0), 1),
-                    'diagnosisToTreatmentDays' => round((float) ($diagnosisToTreatment->avgDays ?? 0), 1),
+                    // old field names (averages) kept for older screens
+                    'registrationToScreeningDays' => $s1['avg'] ?? 0,
+                    'registrationToReferralDays' => $s2['avg'] ?? 0,
+                    'diagnosisToTreatmentDays' => $s4['avg'] ?? 0,
+                    'metrics' => [
+                        ['key' => 'registration_to_screening', 'label' => 'Registration → first screening'] + $s1,
+                        ['key' => 'registration_to_referral', 'label' => 'Registration → first referral'] + $s2,
+                        ['key' => 'sample_to_result', 'label' => 'Sample taken → result released'] + $s3,
+                        ['key' => 'diagnosis_to_treatment', 'label' => 'Diagnosis → treatment start'] + $s4,
+                    ],
                 ],
             ]);
         } catch (\Exception $e) {

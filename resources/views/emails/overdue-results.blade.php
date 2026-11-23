@@ -72,7 +72,7 @@
         <a href="{{ $link }}" style="display:inline-block;background:#15803d;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:12px;font-weight:bold;">
           Open Samples &amp; Test Results
         </a>
-        <p style="margin:20px 0 0;font-size:12px;color:#6b7280;">You receive this daily while results are overdue. It stops once they are entered.</p>
+        <p style="margin:20px 0 0;font-size:12px;color:#6b7280;">You receive this reminder while results are overdue; it stops once they are entered. An administrator can change who gets it under Report Settings.</p>
       </td>
     </tr>
     <tr>

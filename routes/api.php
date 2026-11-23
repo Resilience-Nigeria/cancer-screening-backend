@@ -35,12 +35,11 @@ use App\Http\Controllers\Api\OverdueResultsController;
 
 use App\Http\Controllers\Api\ScreenedClientController;
 use App\Http\Controllers\Api\ReferredClientController;
+use App\Http\Controllers\Api\ReportSettingsController;
+
 
 
 use Illuminate\Support\Facades\Route;
-
-require __DIR__ . '/bloom.php';
-
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -176,6 +175,17 @@ Route::patch('/referred-clients/{referral}/status', [ClientReferralController::c
 
 Route::get('/screened-clients', [ScreenedClientController::class, 'index']);
 Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+
+// Report Settings: scheduled emails (weekly summary, overdue results) and who gets them. Super / NICRAT admins.
+Route::get('/report-settings', [ReportSettingsController::class, 'index']);
+Route::get('/report-settings/users', [ReportSettingsController::class, 'users']);
+Route::patch('/report-settings/recipients/{id}', [ReportSettingsController::class, 'updateRecipient'])->whereNumber('id');
+Route::delete('/report-settings/recipients/{id}', [ReportSettingsController::class, 'removeRecipient'])->whereNumber('id');
+Route::put('/report-settings/{key}', [ReportSettingsController::class, 'update']);
+Route::post('/report-settings/{key}/recipients', [ReportSettingsController::class, 'addRecipient']);
+Route::get('/report-settings/{key}/audience', [ReportSettingsController::class, 'audience']);
+Route::get('/report-settings/{key}/preview', [ReportSettingsController::class, 'preview']);
+Route::post('/report-settings/{key}/send-test', [ReportSettingsController::class, 'sendTest']);
 Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'syncFromVisit']);
 
     Route::get('/users/organizations', [UserController::class, 'getOrganizations']);
@@ -310,6 +320,10 @@ Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'sy
     Route::get('/analytics/referral-funnel', [App\Http\Controllers\CancerAnalyticsController::class, 'getReferralFunnel']);
     Route::get('/analytics/timing-metrics', [App\Http\Controllers\CancerAnalyticsController::class, 'getTimingMetrics']);
     Route::get('/analytics/treatment', [App\Http\Controllers\CancerAnalyticsController::class, 'getTreatmentAnalytics']);
+    Route::get('/analytics/lab-findings', [DashboardController::class, 'getLabAnalytics']);
+    Route::get('/analytics/stage2-summary', [DashboardController::class, 'getStage2Summary']);
+    Route::get('/analytics/facility-summary', [DashboardController::class, 'getFacilitySummary']);
+    Route::get('/analytics/journey-funnel', [DashboardController::class, 'getJourneyFunnel']);
     Route::get('/analytics/socioeconomic', [App\Http\Controllers\CancerAnalyticsController::class, 'getSocioeconomicAnalytics']);
     Route::get('/indigency-support', [App\Http\Controllers\Api\IndigencySupportController::class, 'index']);
 

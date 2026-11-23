@@ -48,7 +48,16 @@ class OverdueResults
 
     public static function forUser($user, int $days = self::DEFAULT_DAYS, int $limit = 50): array
     {
-        $visible = self::facilitiesFor($user);
+        return self::forFacilities(self::facilitiesFor($user), self::scopeLabel($user), $days, $limit);
+    }
+
+    /**
+     * Overdue samples for a list of facilities (null = all). $scope is only used for the wording:
+     * all | facilities | facility.
+     */
+    public static function forFacilities(?array $visible, ?string $scope = null, int $days = self::DEFAULT_DAYS, int $limit = 50): array
+    {
+        $scope ??= $visible === null ? 'all' : (count($visible) === 1 ? 'facility' : 'facilities');
         $cutoff = now()->subDays($days)->toDateString();
 
         $base = ScreeningSample::query()
@@ -91,7 +100,7 @@ class OverdueResults
             ])->values()->all();
 
         return [
-            'scope'      => self::scopeLabel($user),
+            'scope'      => $scope,
             'days'       => $days,
             'total'      => $total,
             'byFacility' => $byFacility,

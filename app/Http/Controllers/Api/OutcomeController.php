@@ -116,13 +116,22 @@ class OutcomeController extends Controller
         
         // Apply search filter
         if ($search) {
-            $query->whereHas('client', function ($q) use ($search) {
-                $q->where('fullName', 'like', "%{$search}%")
-                  ->orWhere('screeningId', 'like', "%{$search}%");
+            $query->where(function ($w) use ($search) {
+                $w->where('clientId', 'like', "%{$search}%")
+                  ->orWhereHas('client', function ($q) use ($search) {
+                      $q->where('fullName', 'like', "%{$search}%")
+                        ->orWhere('clientId', 'like', "%{$search}%")
+                        ->orWhere('phoneNumber', 'like', "%{$search}%");
+                  });
             });
         }
-        
-        // Apply status filters
+
+        // National users can narrow to one facility (Analytics passes its facility filter).
+        if ($visibleIds === null && $request->filled('facilityId') && $request->facilityId !== 'all') {
+            $query->whereHas('client', fn ($q) => $q->where('facilityId', $request->facilityId));
+        }
+
+        // Status filters — the same rules as statistics(), so a card's number matches its list.
         if ($status) {
             switch ($status) {
                 case 'positive':
@@ -131,12 +140,18 @@ class OutcomeController extends Controller
                 case 'negative':
                     $query->where('screeningResult', 'negative');
                     break;
+                case 'confirmed':
+                    $query->where('cancerConfirmed', 'yes');
+                    break;
                 case 'in_treatment':
                     $query->where('treatmentCommenced', 'yes')
-                          ->whereNotIn('treatmentStatus', ['completed', 'discontinued']);
+                          ->where(fn ($x) => $x->whereNull('treatmentStatus')->orWhereNotIn('treatmentStatus', ['completed', 'discontinued']));
                     break;
                 case 'completed':
                     $query->where('treatmentStatus', 'completed');
+                    break;
+                case 'discontinued':
+                    $query->where('treatmentStatus', 'discontinued');
                     break;
                 case 'follow_up':
                     $query->where('screeningResult', 'negative')
@@ -145,9 +160,17 @@ class OutcomeController extends Controller
                                 ->orWhere('followUpEstablished', '!=', 'yes');
                           });
                     break;
+                case 'complete_remission':
+                case 'partial_remission':
+                case 'stable_disease':
+                case 'progressive_disease':
+                case 'recurrence':
+                case 'death':
+                    $query->where('clinicalOutcome', $status);
+                    break;
             }
         }
-        
+
         $outcomes = $query->paginate($perPage);
 
         // Batch-load latest Stage 3 evaluation and Stage 4 treatment
@@ -183,39 +206,48 @@ class OutcomeController extends Controller
     }
     
     /**
-     * Get statistics for outcomes dashboard
-     *
-     * @return JsonResponse
+     * Statistics for the outcomes dashboard, limited to the facilities the user can see
+     * (before, every user got program-wide totals). National users can pass ?facilityId=.
      */
-    public function statistics(): JsonResponse
+    public function statistics(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $visibleIds = $user->visibleFacilityIds();   // null = every facility
+        if ($visibleIds === null && $request->filled('facilityId') && $request->facilityId !== 'all') {
+            $visibleIds = [$request->facilityId];
+        }
+
+        $q = fn () => CaseOutcome::query()
+            ->when($visibleIds !== null, fn ($x) => $x->whereHas('client', fn ($c) => $c->whereIn('facilityId', $visibleIds)));
+
         $stats = [
-            'total_outcomes' => CaseOutcome::count(),
-            'positive_screening' => CaseOutcome::where('screeningResult', 'positive')->count(),
-            'negative_screening' => CaseOutcome::where('screeningResult', 'negative')->count(),
-            'inconclusive_screening' => CaseOutcome::where('screeningResult', 'inconclusive')->count(),
-            'in_treatment' => CaseOutcome::where('treatmentCommenced', 'yes')
-                ->whereNotIn('treatmentStatus', ['completed', 'discontinued'])
+            'total_outcomes' => $q()->count(),
+            'positive_screening' => $q()->where('screeningResult', 'positive')->count(),
+            'negative_screening' => $q()->where('screeningResult', 'negative')->count(),
+            'inconclusive_screening' => $q()->where('screeningResult', 'inconclusive')->count(),
+            'cancer_confirmed' => $q()->where('cancerConfirmed', 'yes')->count(),
+            'in_treatment' => $q()->where('treatmentCommenced', 'yes')
+                ->where(fn ($x) => $x->whereNull('treatmentStatus')->orWhereNotIn('treatmentStatus', ['completed', 'discontinued']))
                 ->count(),
-            'treatment_completed' => CaseOutcome::where('treatmentStatus', 'completed')->count(),
-            'treatment_discontinued' => CaseOutcome::where('treatmentStatus', 'discontinued')->count(),
-            'follow_up_required' => CaseOutcome::where('screeningResult', 'negative')
-                ->where(function ($q) {
-                    $q->whereNull('followUpEstablished')
+            'treatment_completed' => $q()->where('treatmentStatus', 'completed')->count(),
+            'treatment_discontinued' => $q()->where('treatmentStatus', 'discontinued')->count(),
+            'follow_up_required' => $q()->where('screeningResult', 'negative')
+                ->where(function ($x) {
+                    $x->whereNull('followUpEstablished')
                       ->orWhere('followUpEstablished', '!=', 'yes');
                 })
                 ->count(),
-            'complete_remission' => CaseOutcome::where('clinicalOutcome', 'complete_remission')->count(),
-            'partial_remission' => CaseOutcome::where('clinicalOutcome', 'partial_remission')->count(),
-            'stable_disease' => CaseOutcome::where('clinicalOutcome', 'stable_disease')->count(),
-            'progressive_disease' => CaseOutcome::where('clinicalOutcome', 'progressive_disease')->count(),
-            'recurrence' => CaseOutcome::where('clinicalOutcome', 'recurrence')->count(),
-            'death' => CaseOutcome::where('clinicalOutcome', 'death')->count(),
+            'complete_remission' => $q()->where('clinicalOutcome', 'complete_remission')->count(),
+            'partial_remission' => $q()->where('clinicalOutcome', 'partial_remission')->count(),
+            'stable_disease' => $q()->where('clinicalOutcome', 'stable_disease')->count(),
+            'progressive_disease' => $q()->where('clinicalOutcome', 'progressive_disease')->count(),
+            'recurrence' => $q()->where('clinicalOutcome', 'recurrence')->count(),
+            'death' => $q()->where('clinicalOutcome', 'death')->count(),
         ];
-        
+
         return response()->json($stats);
     }
-    
+
     /**
      * Format outcome for API response (both snake_case and camelCase)
      *

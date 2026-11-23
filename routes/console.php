@@ -12,8 +12,10 @@ Artisan::command('inspire', function () {
 // flagging, and overdue escalation.
 Schedule::command('followups:send-reminders')->daily();
 
-Schedule::command('ncsr:overdue-results')
-    ->dailyAt('09:30')
-    ->timezone('Africa/Lagos')
-    ->withoutOverlapping()
-    ->appendOutputTo(storage_path('logs/overdue-results.log'));
+// Schedule::command('ncsr:overdue-results')
+//     ->dailyAt('09:30')
+//     ->timezone('Africa/Lagos')
+//     ->withoutOverlapping()
+//     ->appendOutputTo(storage_path('logs/overdue-results.log'));
+
+    Schedule::command('ncsr:reports-dispatch')->everyFiveMinutes()->withoutOverlapping();
