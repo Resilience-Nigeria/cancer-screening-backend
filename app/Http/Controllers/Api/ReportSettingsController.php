@@ -96,7 +96,9 @@ class ReportSettingsController extends Controller
 
         return response()->json([
             'reports' => $reports,
-            'roles' => DB::table('roles')->orderBy('roleName')->get(['roleName', 'roleDescription'])
+            'roles' => DB::table('roles')
+                ->when(\Illuminate\Support\Facades\Schema::hasColumn('roles', 'isStaffRole'), fn ($q) => $q->where(fn ($w) => $w->whereNull('isStaffRole')->orWhere('isStaffRole', true)))
+                ->orderBy('roleName')->get(['roleName', 'roleDescription'])
                 ->map(fn ($r) => ['roleName' => $r->roleName, 'label' => ReportRecipients::roleLabel($r->roleName), 'description' => $r->roleDescription ?? null]),
             'facilities' => DB::table('facilities')->orderBy('facilityName')->get(['facilityId', 'facilityName', 'facilityState']),
             'timezone' => ReportSetting::TIMEZONE,

@@ -3,607 +3,483 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\ActivityLog;
 use App\Models\Facility;
 use App\Models\Organization;
 use App\Models\Role;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
+use App\Models\User;
+use App\Models\UserFacilityGrant;
 use App\Services\BrevoMailService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
+/**
+ * User Management. What each person may do comes from their roles' settings on the Roles page
+ * (canManageUsers, manageableRoleIds, data scope), not from role names in code:
+ *  - can open the page: Super Admin, or any role with "Can manage users"
+ *  - sees: everyone except Super Admins when their scope is country-wide; otherwise people in their facilities
+ *    whose roles they are allowed to give
+ *  - can add / edit / delete: only people whose roles are all ones they may give, in facilities they can see
+ * A user can hold several roles (the first is the main role) and several facilities.
+ */
 class UserController extends Controller
 {
-    /**
-     * Generate a secure random password
-     */
     private function generatePassword(): string
     {
-        // Generate a random password with uppercase, lowercase, numbers
-        $password = Str::upper(Str::random(2)) . 
-                   Str::lower(Str::random(4)) . 
-                   rand(100, 999) . 
-                   Str::random(1);
-        
-        return $password;
+        return Str::upper(Str::random(2)) . Str::lower(Str::random(4)) . rand(100, 999) . Str::random(1);
     }
 
-    /**
-     * Send welcome email with credentials
-     */
-    // private function sendWelcomeEmail(User $user, string $plainPassword): void
-    // {
-    //     try {
-    //         Mail::send('emails.welcome', [
-    //             'user' => $user,
-    //             'password' => $plainPassword,
-    //             'loginUrl' => config('app.frontend_url') . '/',
-    //         ], function ($message) use ($user) {
-    //             $message->to($user->email, $user->firstName . ' ' . $user->lastName)
-    //                     ->subject('Welcome to NCSR - Your Account Details');
-    //         });
-    //     } catch (\Exception $e) {
-    //         // Log the error but don't fail the user creation
-    //         \Log::error('Failed to send welcome email: ' . $e->getMessage());
-    //     }
-    // }
-
-
-   
-
-private function sendWelcomeEmail(User $user, string $plainPassword): void
-{
-    try {
-        app(BrevoMailService::class)
-            ->sendWelcomeEmail($user, $plainPassword);
-    } catch (\Exception $e) {
-        \Log::error('Failed to send welcome email: ' . $e->getMessage());
+    private function sendWelcomeEmail(User $user, string $plainPassword): void
+    {
+        try {
+            app(BrevoMailService::class)->sendWelcomeEmail($user, $plainPassword);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send welcome email: ' . $e->getMessage());
+        }
     }
-}
 
-    /**
-     * Get all users with filters (respects role hierarchy and hides super admins)
-     */
+    private function log(string $action, string $text, User $user, array $details = []): void
+    {
+        if (class_exists(ActivityLog::class)) {
+            ActivityLog::record($action, $text, ['subjectType' => 'user', 'subjectId' => $user->id, 'details' => $details]);
+        }
+    }
+
+    private function deny(string $message, int $code = 403): JsonResponse
+    {
+        return response()->json(['status' => false, 'message' => $message], $code);
+    }
+
+    private function nameOf(User $u): string
+    {
+        return trim(($u->firstName ?? '') . ' ' . ($u->lastName ?? '')) ?: (string) $u->email;
+    }
+
+    /** Role ids of a user (main + extra). */
+    private function roleIdsOf(User $u): array
+    {
+        return $u->allRoles()->pluck('roleId')->map(fn ($v) => (int) $v)->all();
+    }
+
+    /** May the signed-in manager change this user? */
+    private function canChange(User $me, User $u): bool
+    {
+        if ($u->isSuperAdmin()) return false;
+        if (array_diff($this->roleIdsOf($u), $me->manageableRoleIds())) return false;
+        $scope = $me->visibleFacilityIds();
+        if ($scope === null) return true;
+        $theirs = array_filter(array_merge([$u->facilityId], $u->facilityGrants()->pluck('facilityId')->all()));
+        return $theirs && !array_diff(array_map('intval', $theirs), $scope);
+    }
+
+    private function format(User $u, ?User $me = null): array
+    {
+        $roles = $u->allRoles();
+        $grants = $u->relationLoaded('facilityGrants') ? $u->facilityGrants : $u->facilityGrants()->with('facility')->get();
+        $assigned = $roles->contains(fn ($r) => $r->dataScopeType === 'assigned');
+
+        $access = $u->hasNationalAccess()
+            ? 'All facilities'
+            : (($n = count($u->visibleFacilityIds() ?? [])) === 1 ? '1 facility' : "{$n} facilities");
+
+        return [
+            'id' => $u->id,
+            'firstName' => $u->firstName,
+            'lastName' => $u->lastName,
+            'email' => $u->email,
+            'phoneNumber' => $u->phoneNumber,
+            'alternatePhoneNumber' => $u->alternatePhoneNumber,
+            'role' => $u->user_role?->roleName ?? $u->role,          // main role name (older screens)
+            'roleId' => $u->role,
+            'roles' => $roles->map(fn ($r) => ['roleId' => (int) $r->roleId, 'roleName' => $r->roleName, 'label' => $r->label()])->values(),
+            'status' => $u->status,
+            'facilityId' => $u->facilityId,
+            'facility' => $u->facility ? [
+                'id' => $u->facility->id ?? null,
+                'facilityId' => $u->facility->facilityId,
+                'facilityName' => $u->facility->facilityName,
+                'facilityCode' => $u->facility->facilityCode ?? null,
+            ] : null,
+            'allFacilities' => (bool) $u->allFacilities,
+            'usesAssignedFacilities' => $assigned,
+            'facilityIds' => $grants->pluck('facilityId')->map(fn ($v) => (int) $v)->values(),
+            'facilities' => $grants->map(fn ($g) => ['facilityId' => (int) $g->facilityId, 'facilityName' => $g->facility->facilityName ?? "#{$g->facilityId}"])->values(),
+            'organizationId' => $u->organization_id,
+            'organizationName' => $u->organization->organizationName ?? null,
+            'accessText' => $access,
+            'canEdit' => $me ? $this->canChange($me, $u) : null,
+            'createdAt' => $u->created_at,
+            'updatedAt' => $u->updated_at,
+        ];
+    }
+
+    /** Users the manager may see. */
+    private function visibleUsersQuery(User $me)
+    {
+        $scope = $me->visibleFacilityIds();
+        $manageable = $me->manageableRoleIds();
+        $super = Role::where('roleName', 'NICRAT_SUPER_ADMIN')->value('roleId');
+        $staffRoleIds = Role::where(fn ($q) => $q->whereNull('isStaffRole')->orWhere('isStaffRole', true))->pluck('roleId')->all();
+
+        $q = User::query()
+            ->whereIn('role', $staffRoleIds)
+            ->when($super, fn ($x) => $x->where('role', '!=', $super)
+                ->whereNotIn('id', DB::table('user_role_assignments')->select('userId')->where('roleId', $super)));
+
+        if ($scope !== null) {
+            // Limited managers: people in their facilities, holding only roles they may give.
+            $q->where(fn ($w) => $w->whereIn('facilityId', $scope)
+                    ->orWhereIn('id', UserFacilityGrant::query()->select('userId')->whereIn('facilityId', $scope)))
+              ->whereIn('role', $manageable ?: [0])
+              ->whereNotIn('id', DB::table('user_role_assignments')->select('userId')->whereNotIn('roleId', $manageable ?: [0]));
+        }
+        return $q;
+    }
+
+    /** GET /users */
     public function index(Request $request): JsonResponse
     {
-        $currentUser = Auth::user();
-        $query = User::with(['facility', 'user_role']);
+        $me = Auth::user();
+        if (!$me->canManageUsers()) return $this->deny('You do not have permission to view users');
 
-        // Get current user's role name
-        $currentUserRole = $currentUser->user_role?->roleName;
+        $query = $this->visibleUsersQuery($me)->with(['facility', 'user_role', 'assignedRoles', 'facilityGrants.facility', 'organization']);
 
-        // Filter users based on current user's role
-        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
-            $query->whereHas('user_role', function($q) {
-                $q->whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN', 'NURSE', 'DOCTOR']);
-            });
-        } 
-        elseif (in_array($currentUserRole, ['NAVIGATOR', 'HOSPITAL_ADMIN'])) {
-            $query->where('facilityId', $currentUser->facilityId)
-                  ->whereHas('user_role', function($q) {
-                      $q->whereIn('roleName', ['NURSE', 'DOCTOR']);
-                  });
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(fn ($q) => $q->where('firstName', 'like', "%{$s}%")
+                ->orWhere('lastName', 'like', "%{$s}%")
+                ->orWhere('email', 'like', "%{$s}%")
+                ->orWhere('phoneNumber', 'like', "%{$s}%"));
         }
-        elseif ($currentUserRole === 'NICRAT_ADMIN') {
-            $query->whereHas('user_role', function($q) {
-                $q->whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN', 'NURSE', 'DOCTOR']);
-            });
+        if ($request->filled('facility') && $request->facility !== 'all') {
+            $query->where('facilityId', $request->facility);
         }
-        else {
-            return response()->json([
-                'status' => false,
-                'message' => 'You do not have permission to view users',
-            ], 403);
+        if ($request->filled('role') && $request->role !== 'all') {
+            $rid = is_numeric($request->role) ? (int) $request->role : Role::where('roleName', $request->role)->value('roleId');
+            $query->where(fn ($q) => $q->where('role', $rid)->orWhereIn('id', DB::table('user_role_assignments')->select('userId')->where('roleId', $rid)));
         }
-
-        // Search
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('firstName', 'like', "%{$search}%")
-                  ->orWhere('lastName', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phoneNumber', 'like', "%{$search}%");
-            });
-        }
-
-        // Filter by facility
-        if ($request->has('facility') && $request->facility !== 'all') {
-            if (in_array($currentUserRole, ['NICRAT_SUPER_ADMIN', 'NICRAT_ADMIN'])) {
-                $query->where('facilityId', $request->facility);
-            }
-        }
-
-        // Filter by role
-        if ($request->has('role') && $request->role !== 'all') {
-            $query->where('role', $request->role);
-        }
-
-        // Filter by status
-        if ($request->has('status') && $request->status !== 'all') {
+        if ($request->filled('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
         }
 
-        $users = $query->get()->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'firstName' => $user->firstName,
-                'lastName' => $user->lastName,
-                'email' => $user->email,
-                'phoneNumber' => $user->phoneNumber,
-                'alternatePhoneNumber' => $user->alternatePhoneNumber,
-                'role' => $user->user_role?->roleName ?? $user->role,
-                'status' => $user->status,
-                'facilityId' => $user->facilityId,
-                'facility' => $user->facility ? [
-                    'id' => $user->facility->id,
-                    'facilityId' => $user->facility->facilityId,
-                    'facilityName' => $user->facility->facilityName,
-                    'facilityCode' => $user->facility->facilityCode,
-                ] : null,
-                'createdAt' => $user->created_at,
-                'updatedAt' => $user->updated_at,
-            ];
-        });
+        $list = $query->orderBy('firstName')->get();
+        $users = $list->map(fn ($u) => $this->format($u, $me))->values();
 
-        // Calculate stats
-        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
-            $statsQuery = User::whereHas('user_role', function($q) {
-                $q->whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN', 'NURSE', 'DOCTOR']);
-            });
-        } elseif (in_array($currentUserRole, ['NAVIGATOR', 'HOSPITAL_ADMIN'])) {
-            $statsQuery = User::where('facilityId', $currentUser->facilityId)
-                              ->whereHas('user_role', function($q) {
-                                  $q->whereIn('roleName', ['NURSE', 'DOCTOR']);
-                              });
-        } elseif ($currentUserRole === 'NICRAT_ADMIN') {
-            $statsQuery = User::whereHas('user_role', function($q) {
-                $q->whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN', 'NURSE', 'DOCTOR']);
-            });
-        } else {
-            $statsQuery = User::where('id', 0);
+        $all = $this->visibleUsersQuery($me)->with(['user_role', 'assignedRoles'])->get();
+        $byRole = [];
+        foreach ($all as $u) {
+            foreach ($u->allRoles() as $r) {
+                $byRole[$r->roleName] = ($byRole[$r->roleName] ?? 0) + 1;
+            }
         }
-
-        $stats = [
-            'total' => $statsQuery->count(),
-            'active' => $statsQuery->where('status', 'active')->count(),
-            'inactive' => $statsQuery->where('status', 'inactive')->count(),
-            'byRole' => $statsQuery->select('role', \DB::raw('count(*) as total'))
-                ->groupBy('role')
-                ->pluck('total', 'role')
-                ->toArray(),
-        ];
 
         return response()->json([
             'status' => true,
             'users' => $users,
-            'stats' => $stats,
-        ]);
-    }
-
-    /**
-     * Get a single user
-     */
-    public function show(User $user): JsonResponse
-    {
-        $currentUser = Auth::user();
-        $currentUserRole = $currentUser->user_role?->roleName;
-
-        // Check access based on role
-        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
-            if ($user->user_role?->roleName === 'NICRAT_SUPER_ADMIN' && $user->id !== $currentUser->id) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Unauthorized access',
-                ], 403);
-            }
-        } elseif (in_array($currentUserRole, ['NAVIGATOR', 'HOSPITAL_ADMIN'])) {
-            if (!$currentUser->canAccessFacility($user->facilityId)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Unauthorized access',
-                ], 403);
-            }
-        } elseif ($currentUserRole === 'NICRAT_ADMIN') {
-            if ($user->user_role?->roleName === 'NICRAT_SUPER_ADMIN') {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Unauthorized access',
-                ], 403);
-            }
-        } else {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unauthorized access',
-            ], 403);
-        }
-
-        $user->load(['facility', 'user_role']);
-
-        return response()->json([
-            'status' => true,
-            'user' => [
-                'id' => $user->id,
-                'firstName' => $user->firstName,
-                'lastName' => $user->lastName,
-                'email' => $user->email,
-                'phoneNumber' => $user->phoneNumber,
-                'alternatePhoneNumber' => $user->alternatePhoneNumber,
-                'role' => $user->role,
-                'user_role' => $user->user_role,
-                'status' => $user->status,
-                'facilityId' => $user->facilityId,
-                'facility' => $user->facility ? [
-                    'id' => $user->facility->id,
-                    'facilityId' => $user->facility->facilityId,
-                    'facilityName' => $user->facility->facilityName,
-                    'facilityCode' => $user->facility->facilityCode,
-                ] : null,
-                'createdAt' => $user->created_at,
-                'updatedAt' => $user->updated_at,
+            'stats' => [
+                'total' => $all->count(),
+                'active' => $all->where('status', 'active')->count(),
+                'inactive' => $all->where('status', 'inactive')->count(),
+                'managers' => $all->filter(fn ($u) => $u->allRoles()->contains(fn ($r) => (bool) $r->canManageUsers))->count(),
+                'byRole' => $byRole,
             ],
         ]);
     }
 
+    /** GET /users/{user} */
+    public function show(User $user): JsonResponse
+    {
+        $me = Auth::user();
+        if (!$me->canManageUsers() || ($user->id !== $me->id && !$this->visibleUsersQuery($me)->whereKey($user->id)->exists())) {
+            return $this->deny('Unauthorized access');
+        }
+        $user->load(['facility', 'user_role', 'assignedRoles', 'facilityGrants.facility', 'organization']);
+        return response()->json(['status' => true, 'user' => $this->format($user, $me)]);
+    }
+
     /**
-     * Create a new user with auto-generated password
+     * Validates roles / facilities for a create or update and returns the clean values, or a JsonResponse error.
+     * Accepts roles[] (first = main role) or the older single "role".
      */
+    private function resolveAccess(Request $request, User $me, ?User $existing = null)
+    {
+        $roleIds = $request->input('roles');
+        if (!is_array($roleIds) || !$roleIds) {
+            $roleIds = $request->filled('role') ? [$request->input('role')] : ($existing ? $this->roleIdsOf($existing) : []);
+        }
+        $roleIds = array_values(array_unique(array_map('intval', $roleIds)));
+        if (!$roleIds) return $this->deny('Choose at least one role.', 422);
+
+        $roles = Role::whereIn('roleId', $roleIds)->get()->keyBy('roleId');
+        if ($roles->count() !== count($roleIds)) return $this->deny('One of the roles no longer exists.', 422);
+
+        $notAllowed = array_diff($roleIds, $me->manageableRoleIds());
+        if ($notAllowed) {
+            $names = $roles->only($notAllowed)->map(fn ($r) => $r->label())->implode(', ');
+            return $this->deny("You are not allowed to give the role(s): {$names}.");
+        }
+
+        $facilityId = $request->has('facilityId') ? ($request->input('facilityId') ?: null) : $existing?->facilityId;
+        $facilityIds = $request->has('facilityIds')
+            ? array_values(array_unique(array_map('intval', array_filter((array) $request->input('facilityIds')))))
+            : ($existing ? $existing->facilityGrants()->pluck('facilityId')->map(fn ($v) => (int) $v)->all() : []);
+        $usesAssigned = $roles->contains(fn ($r) => $r->dataScopeType === 'assigned');
+        $allFacilities = $usesAssigned && filter_var($request->input('allFacilities', $existing?->allFacilities ?? false), FILTER_VALIDATE_BOOLEAN);
+        $orgId = $request->has('organizationId') ? ($request->input('organizationId') ?: null) : $existing?->organization_id;
+
+        $scope = $me->visibleFacilityIds();
+        // A manager limited to their facilities: people they add default to the manager's own facility.
+        if ($scope !== null && !$facilityId && !$usesAssigned && $me->facilityId) {
+            $facilityId = $me->facilityId;
+        }
+
+        $needsFacility = $roles->first(fn ($r) => $r->needsFacility());
+        if ($needsFacility && !$facilityId) {
+            return $this->deny("{$needsFacility->label()} must be assigned to a facility.", 422);
+        }
+        $needsOrg = $roles->first(fn ($r) => (bool) $r->requiresOrganization);
+        if ($needsOrg && !$orgId) {
+            return $this->deny("{$needsOrg->label()} must belong to an organisation.", 422);
+        }
+        if ($usesAssigned && !$allFacilities && !$facilityId && !$facilityIds) {
+            return $this->deny('Choose "All facilities" or at least one facility for this person.', 422);
+        }
+
+        // Limited managers can only use facilities they can see, and can't give "all facilities".
+        if ($scope !== null) {
+            if ($allFacilities) return $this->deny('Only someone with country-wide access can give access to all facilities.');
+            $outside = array_diff(array_map('intval', array_filter(array_merge([$facilityId], $facilityIds))), $scope);
+            if ($outside) return $this->deny('You can only assign facilities you have access to.');
+        }
+
+        if ($facilityId && !Facility::where('facilityId', $facilityId)->exists()) return $this->deny('Facility not found.', 422);
+        if ($orgId && class_exists(Organization::class) && !Organization::whereKey($orgId)->exists()) return $this->deny('Organisation not found.', 422);
+
+        return [
+            'roleIds' => $roleIds,
+            'facilityId' => $facilityId,
+            'facilityIds' => array_values(array_diff($facilityIds, [(int) $facilityId])),
+            'allFacilities' => $allFacilities,
+            'organizationId' => $needsOrg ? $orgId : null,
+        ];
+    }
+
+    private function syncAccess(User $user, array $a, User $me): void
+    {
+        DB::table('user_role_assignments')->where('userId', $user->id)->whereNotIn('roleId', $a['roleIds'])->delete();
+        foreach ($a['roleIds'] as $rid) {
+            DB::table('user_role_assignments')->updateOrInsert(
+                ['userId' => $user->id, 'roleId' => $rid],
+                ['assignedBy' => $me->id, 'updated_at' => now(), 'created_at' => now()]
+            );
+        }
+        UserFacilityGrant::where('userId', $user->id)->whereNotIn('facilityId', $a['facilityIds'] ?: [0])->delete();
+        foreach ($a['facilityIds'] as $fid) {
+            UserFacilityGrant::firstOrCreate(['userId' => $user->id, 'facilityId' => $fid], ['grantedBy' => $me->id]);
+        }
+        $user->unsetRelation('assignedRoles');
+        $user->unsetRelation('facilityGrants');
+        $user->forgetVisibleFacilities();
+    }
+
+    /** POST /users — password generated and emailed */
     public function store(Request $request): JsonResponse
     {
-        $currentUser = Auth::user();
+        $me = Auth::user();
+        if (!$me->canCreateUsers()) return $this->deny('You do not have permission to create users');
 
-        $validator = Validator::make($request->all(), [
+        $v = Validator::make($request->all(), [
             'firstName' => 'required|string|max:255',
             'lastName' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
             'phoneNumber' => 'required|string|max:20',
             'alternatePhoneNumber' => 'nullable|string|max:20',
-            // Password field removed - will be auto-generated
-            'role' => 'required|string|exists:roles,roleId',
-            'facilityId' => 'nullable|exists:facilities,facilityId',
+            'roles' => 'nullable|array',
+            'role' => 'nullable',
+            'facilityId' => 'nullable',
+            'facilityIds' => 'nullable|array',
+            'allFacilities' => 'nullable',
+            'organizationId' => 'nullable',
             'status' => 'sometimes|in:active,inactive',
         ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+        if ($v->fails()) {
+            return response()->json(['status' => false, 'message' => $v->errors()->first(), 'errors' => $v->errors()], 422);
         }
 
-        // Get the role being assigned
-        $roleBeingAssigned = Role::where('roleId', $request->role)->first();
-        
-        if (!$roleBeingAssigned) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Invalid role specified',
-            ], 422);
-        }
+        $a = $this->resolveAccess($request, $me);
+        if ($a instanceof JsonResponse) return $a;
 
-        // Get current user's role name
-        $currentUserRole = $currentUser->user_role?->roleName;
+        $plain = $this->generatePassword();
+        $user = DB::transaction(function () use ($request, $a, $plain, $me) {
+            $user = User::create([
+                'firstName' => $request->firstName,
+                'lastName' => $request->lastName,
+                'email' => $request->email,
+                'phoneNumber' => $request->phoneNumber,
+                'alternatePhoneNumber' => $request->alternatePhoneNumber,
+                'password' => Hash::make($plain),
+                'role' => $a['roleIds'][0],
+                'facilityId' => $a['facilityId'],
+                'organization_id' => $a['organizationId'],
+                'allFacilities' => $a['allFacilities'],
+                'status' => $request->status ?? 'active',
+            ]);
+            $this->syncAccess($user, $a, $me);
+            return $user;
+        });
 
-        // Role-based validation
-        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
-            $allowedRoles = ['NICRAT_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN', 'PARTNER'];
-            
-            if (!in_array($roleBeingAssigned->roleName, $allowedRoles)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Super admin can only create NICRAT Admins, Navigators, Hospital Admins, and Partners',
-                ], 403);
-            }
-
-            if (in_array($roleBeingAssigned->roleName, ['NAVIGATOR', 'HOSPITAL_ADMIN']) && !$request->facilityId) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Hospital administrators must be assigned to a facility',
-                ], 422);
-            }
-        } 
-        elseif (in_array($currentUserRole, ['NAVIGATOR', 'HOSPITAL_ADMIN'])) {
-            if (!in_array($roleBeingAssigned->roleName, ['NURSE', 'DOCTOR'])) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Navigators and Hospital Admins can only create Nurses or Doctors',
-                ], 403);
-            }
-
-            if ($request->facilityId != $currentUser->facilityId) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'You can only create users in your own facility',
-                ], 403);
-            }
-
-            $request->merge(['facilityId' => $currentUser->facilityId]);
-        } 
-        else {
-            return response()->json([
-                'status' => false,
-                'message' => 'You do not have permission to create users',
-            ], 403);
-        }
-
-        // Generate random password
-        $plainPassword = $this->generatePassword();
-
-        // Create the user
-        $user = User::create([
-            'firstName' => $request->firstName,
-            'lastName' => $request->lastName,
-            'email' => $request->email,
-            'phoneNumber' => $request->phoneNumber,
-            'alternatePhoneNumber' => $request->alternatePhoneNumber,
-            'password' => Hash::make($plainPassword),
-            'role' => $request->role,
-            'facilityId' => $request->facilityId,
-            'status' => $request->status ?? 'active',
-        ]);
-
-        // Load relationships
-        $user->load(['facility', 'user_role']);
-
-        // Send welcome email with credentials
-        $this->sendWelcomeEmail($user, $plainPassword);
+        $user->load(['facility', 'user_role', 'assignedRoles', 'facilityGrants.facility', 'organization']);
+        $this->sendWelcomeEmail($user, $plain);
+        $this->log('user_created', "Created user {$this->nameOf($user)} ({$user->email}) with role(s): " . $user->allRoles()->map->label()->implode(', ') . '.', $user);
 
         return response()->json([
             'status' => true,
             'message' => 'User created successfully. Login credentials have been sent to their email.',
-            'user' => [
-                'id' => $user->id,
-                'firstName' => $user->firstName,
-                'lastName' => $user->lastName,
-                'email' => $user->email,
-                'phoneNumber' => $user->phoneNumber,
-                'alternatePhoneNumber' => $user->alternatePhoneNumber,
-                'role' => $user->role,
-                'user_role' => $user->user_role,
-                'facilityId' => $user->facilityId,
-                'facility' => $user->facility,
-                'status' => $user->status,
-            ],
+            'user' => $this->format($user, $me),
         ], 201);
     }
 
+    /** PUT /users/{id} */
     public function update(Request $request, $id): JsonResponse
     {
-        $currentUser = Auth::user();
-        $user = User::with(['facility', 'user_role'])->findOrFail($id);
+        $me = Auth::user();
+        $user = User::with(['facility', 'user_role', 'assignedRoles', 'facilityGrants'])->findOrFail($id);
+        $self = $user->id === $me->id;
 
-        $validator = Validator::make($request->all(), [
+        if (!$self && (!$me->canManageUsers() || !$this->canChange($me, $user))) {
+            return $this->deny('You cannot edit this user.');
+        }
+
+        $v = Validator::make($request->all(), [
             'firstName' => 'sometimes|string|max:255',
             'lastName' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|max:255|unique:users,email,' . $id,
             'phoneNumber' => 'sometimes|string|max:20',
             'alternatePhoneNumber' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8',
-            'role' => 'sometimes|string|exists:roles,roleId',
-            'facilityId' => 'sometimes|exists:facilities,facilityId',
+            'roles' => 'nullable|array',
+            'facilityIds' => 'nullable|array',
             'status' => 'sometimes|in:active,inactive',
         ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+        if ($v->fails()) {
+            return response()->json(['status' => false, 'message' => $v->errors()->first(), 'errors' => $v->errors()], 422);
         }
 
-        $currentUserRole = $currentUser->user_role?->roleName;
-
-        // Role-based update validation
-        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
-            if ($user->user_role?->roleName === 'NICRAT_SUPER_ADMIN' && $user->id !== $currentUser->id) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'You cannot edit other super administrators',
-                ], 403);
-            }
-        } 
-        elseif (in_array($currentUserRole, ['NAVIGATOR', 'HOSPITAL_ADMIN'])) {
-            if (!$currentUser->canAccessFacility($user->facilityId)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'You can only edit users in your own facility',
-                ], 403);
-            }
-
-            if ($request->has('role')) {
-                $newRole = Role::where('roleId', $request->role)->first();
-                if (in_array($newRole?->roleName, ['NICRAT_SUPER_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN', 'NICRAT_ADMIN'])) {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'You cannot assign super admin, NICRAT admin, navigator, or hospital admin roles',
-                    ], 403);
-                }
-            }
-
-            if ($request->has('facilityId') && $request->facilityId != $currentUser->facilityId) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'You cannot assign users to other facilities',
-                ], 403);
-            }
-        } 
-        else {
-            return response()->json([
-                'status' => false,
-                'message' => 'You do not have permission to edit users',
-            ], 403);
+        $changesAccess = !$self && ($request->hasAny(['roles', 'role', 'facilityId', 'facilityIds', 'allFacilities', 'organizationId']));
+        $a = null;
+        if ($changesAccess) {
+            $a = $this->resolveAccess($request, $me, $user);
+            if ($a instanceof JsonResponse) return $a;
         }
 
-        // Update user
-        $user->update([
-            'firstName' => $request->firstName ?? $user->firstName,
-            'lastName' => $request->lastName ?? $user->lastName,
-            'email' => $request->email ?? $user->email,
-            'phoneNumber' => $request->phoneNumber ?? $user->phoneNumber,
-            'alternatePhoneNumber' => $request->alternatePhoneNumber ?? $user->alternatePhoneNumber,
-            'role' => $request->role ?? $user->role,
-            'facilityId' => $request->facilityId ?? $user->facilityId,
-            'status' => $request->status ?? $user->status,
+        $before = ['roles' => $user->allRoles()->map->label()->all(), 'facilityId' => $user->facilityId, 'status' => $user->status];
+
+        DB::transaction(function () use ($request, $user, $a, $me, $self) {
+            $user->update([
+                'firstName' => $request->firstName ?? $user->firstName,
+                'lastName' => $request->lastName ?? $user->lastName,
+                'email' => $request->email ?? $user->email,
+                'phoneNumber' => $request->phoneNumber ?? $user->phoneNumber,
+                'alternatePhoneNumber' => $request->has('alternatePhoneNumber') ? $request->alternatePhoneNumber : $user->alternatePhoneNumber,
+                'status' => $self ? $user->status : ($request->status ?? $user->status),
+            ] + ($a ? [
+                'role' => $a['roleIds'][0],
+                'facilityId' => $a['facilityId'],
+                'organization_id' => $a['organizationId'],
+                'allFacilities' => $a['allFacilities'],
+            ] : []));
+            if ($request->filled('password')) {
+                $user->update(['password' => Hash::make($request->password)]);
+            }
+            if ($a) $this->syncAccess($user, $a, $me);
+        });
+
+        $user->refresh()->load(['facility', 'user_role', 'assignedRoles', 'facilityGrants.facility', 'organization']);
+        $this->log('user_updated', "Updated user {$this->nameOf($user)} ({$user->email}).", $user, [
+            'before' => $before,
+            'after' => ['roles' => $user->allRoles()->map->label()->all(), 'facilityId' => $user->facilityId, 'status' => $user->status],
         ]);
 
-        // Update password if provided
-        if ($request->filled('password')) {
-            $user->update(['password' => Hash::make($request->password)]);
-        }
+        return response()->json(['status' => true, 'message' => 'User updated successfully', 'user' => $this->format($user, $me)]);
+    }
 
-        $user->load(['facility', 'user_role']);
+    /** DELETE /users/{id} */
+    public function destroy($id): JsonResponse
+    {
+        $me = Auth::user();
+        $user = User::with('user_role')->findOrFail($id);
+        if ($user->id === $me->id) return $this->deny('You cannot delete your own account');
+        if (!$me->canManageUsers() || !$this->canChange($me, $user)) return $this->deny('You cannot delete this user.');
+
+        $name = $this->nameOf($user);
+        $email = $user->email;
+        DB::transaction(function () use ($user) {
+            DB::table('user_role_assignments')->where('userId', $user->id)->delete();
+            UserFacilityGrant::where('userId', $user->id)->delete();
+            $user->delete();
+        });
+        $this->log('user_deleted', "Deleted user {$name} ({$email}).", $user);
+
+        return response()->json(['status' => true, 'message' => 'User deleted successfully']);
+    }
+
+    /**
+     * GET /users/roles
+     * roles    : the roles this person may give (with what each needs: facility, organisation, assigned facilities)
+     * allRoles : every staff role (labels for filters and badges)
+     * manager  : what the signed-in person can do
+     */
+    public function roles(): JsonResponse
+    {
+        $me = Auth::user();
+        $staff = Role::where(fn ($q) => $q->whereNull('isStaffRole')->orWhere('isStaffRole', true))->orderBy('roleName')->get();
+        $manageable = $me->manageableRoleIds();
+        $scope = $me->visibleFacilityIds();
 
         return response()->json([
             'status' => true,
-            'message' => 'User updated successfully',
-            'user' => [
-                'id' => $user->id,
-                'firstName' => $user->firstName,
-                'lastName' => $user->lastName,
-                'email' => $user->email,
-                'phoneNumber' => $user->phoneNumber,
-                'alternatePhoneNumber' => $user->alternatePhoneNumber,
-                'role' => $user->role,
-                'user_role' => $user->user_role,
-                'facilityId' => $user->facilityId,
-                'facility' => $user->facility,
-                'status' => $user->status,
+            'roles' => $staff->whereIn('roleId', $manageable)->map->toOption()->values(),
+            'allRoles' => $staff->map->toOption()->values(),
+            'manager' => [
+                'canView' => $me->canManageUsers(),
+                'canCreate' => !empty($manageable),
+                'national' => $scope === null,
+                'facilityId' => $me->facilityId,
+                'canEditRoles' => $me->isSuperAdmin(),
             ],
         ]);
     }
 
-    public function destroy($id): JsonResponse
-    {
-        $currentUser = Auth::user();
-        $user = User::with('user_role')->findOrFail($id);
-
-        $currentUserRole = $currentUser->user_role?->roleName;
-
-        // Role-based delete validation
-        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
-            if ($user->user_role?->roleName === 'NICRAT_SUPER_ADMIN') {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'You cannot delete super administrators',
-                ], 403);
-            }
-        } 
-        elseif (in_array($currentUserRole, ['NAVIGATOR', 'HOSPITAL_ADMIN'])) {
-            if (!$currentUser->canAccessFacility($user->facilityId)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'You can only delete users in your own facility',
-                ], 403);
-            }
-
-            if (in_array($user->user_role?->roleName, ['NAVIGATOR', 'HOSPITAL_ADMIN', 'NICRAT_ADMIN'])) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'You cannot delete navigators, hospital admins, or NICRAT staff',
-                ], 403);
-            }
-        } 
-        else {
-            return response()->json([
-                'status' => false,
-                'message' => 'You do not have permission to delete users',
-            ], 403);
-            }
-
-        // Prevent self-deletion
-        if ($user->id === $currentUser->id) {
-            return response()->json([
-                'status' => false,
-                'message' => 'You cannot delete your own account',
-            ], 403);
-        }
-
-        $user->delete();
-
-        return response()->json([
-            'status' => true,
-            'message' => 'User deleted successfully',
-        ]);
-    }
-
-    /**
-     * Get available roles based on current user's role
-     */
-    public function roles(): JsonResponse
-    {
-        $currentUser = Auth::user();
-        $currentUserRole = $currentUser->user_role?->roleName;
-
-        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
-            $roles = Role::whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'PARTNER'])->get();
-        } elseif (in_array($currentUserRole, ['NAVIGATOR', 'HOSPITAL_ADMIN'])) {
-            $roles = Role::whereIn('roleName', ['NURSE', 'DOCTOR'])->get();
-        } else {
-            $roles = [];
-        }
-
-        return response()->json([
-            'status' => true,
-            'roles' => $roles,
-        ]);
-    }
-
-    /**
-     * Get facilities for dropdown
-     */
+    /** GET /users/facilities — facilities the signed-in manager can assign */
     public function facilities(): JsonResponse
     {
-        $currentUser = Auth::user();
-        $currentUserRole = $currentUser->user_role?->roleName;
+        $me = Auth::user();
+        if (!$me->canManageUsers()) return response()->json(['status' => true, 'facilities' => []]);
+        $scope = $me->visibleFacilityIds();
+        $facilities = Facility::query()
+            ->when($scope !== null, fn ($q) => $q->whereIn('facilityId', $scope))
+            ->where(fn ($q) => $q->where('status', 'active')->orWhereNull('status'))
+            ->orderBy('facilityName')
+            ->get(['facilityId', 'facilityName', 'facilityCode', 'facilityState']);
+        return response()->json(['status' => true, 'facilities' => $facilities]);
+    }
 
-        if ($currentUserRole === 'NICRAT_SUPER_ADMIN') {
-            $facilities = Facility::where('status', 'active')
-                ->select('facilityId', 'facilityName', 'facilityCode')
+    /** GET /users/organizations — for roles that belong to an organisation (e.g. Partner) */
+    public function getOrganizations()
+    {
+        try {
+            $organizations = Organization::where('status', true)
+                ->select('id', 'organizationName', 'organizationCode', 'contactEmail')
+                ->orderBy('organizationName')
                 ->get();
-        } elseif (in_array($currentUserRole, ['NAVIGATOR', 'HOSPITAL_ADMIN'])) {
-            $facilities = Facility::where('facilityId', $currentUser->facilityId)
-                ->where('status', 'active')
-                ->select('facilityId', 'facilityName', 'facilityCode')
-                ->get();
-        } else {
-            $facilities = [];
+            return response()->json(['status' => true, 'organizations' => $organizations, 'message' => 'Organizations fetched successfully']);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => 'Failed to fetch organizations'], 500);
         }
-
-        return response()->json([
-            'status' => true,
-            'facilities' => $facilities,
-        ]);
     }
-
-
-    /**
- * Get all organizations for partner role
- */
-public function getOrganizations()
-{
-    try {
-        $organizations = Organization::where('status', true)
-            ->select('id', 'organizationName', 'organizationCode', 'contactEmail')
-            ->orderBy('organizationName')
-            ->get();
-
-        return response()->json([
-            'status' => true,
-            'organizations' => $organizations,
-            'message' => 'Organizations fetched successfully'
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => false,
-            'message' => 'Failed to fetch organizations'
-        ], 500);
-    }
-}
 }

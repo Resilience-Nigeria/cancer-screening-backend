@@ -32,7 +32,7 @@ class ReportRecipients
 
     public static function activeUsers(): Collection
     {
-        return User::with('user_role')->get()->filter(function ($u) {
+        return User::with(['user_role', 'assignedRoles'])->get()->filter(function ($u) {
             $status = strtolower((string) ($u->status ?? 'active'));
             return !empty($u->email) && !in_array($status, ['inactive', 'disabled', 'suspended'], true);
         });
@@ -94,7 +94,9 @@ class ReportRecipients
         foreach ($rows as $row) {
             if ($row->type === 'role') {
                 foreach ($users as $u) {
-                    if (($u->user_role->roleName ?? null) !== $row->roleName || in_array((int) $u->id, $excluded, true)) continue;
+                    // Any of the person's roles counts (people can hold several roles).
+                    $names = method_exists($u, 'roleNames') ? $u->roleNames() : [$u->user_role->roleName ?? null];
+                    if (!in_array($row->roleName, $names, true) || in_array((int) $u->id, $excluded, true)) continue;
                     $add($u->email, $nameOf($u), self::rowFacilities($reportKey, $row, $u), $u, 'Role: ' . self::roleLabel($row->roleName));
                 }
             } elseif ($row->type === 'user' && !$row->isExcluded) {
@@ -121,9 +123,20 @@ class ReportRecipients
         return isset($all[$k]) ? $all[$k]['facilities'] : false;
     }
 
+    /** The role's display name from the Roles page, or a tidied-up code. */
     public static function roleLabel(?string $role): string
     {
-        return ucwords(strtolower(str_replace('_', ' ', (string) $role)));
+        static $labels = null;
+        if ($labels === null) {
+            try {
+                $labels = \Illuminate\Support\Facades\Schema::hasColumn('roles', 'roleLabel')
+                    ? \Illuminate\Support\Facades\DB::table('roles')->whereNotNull('roleLabel')->pluck('roleLabel', 'roleName')->all()
+                    : [];
+            } catch (\Throwable $e) {
+                $labels = [];
+            }
+        }
+        return $labels[$role] ?? ucwords(strtolower(str_replace('_', ' ', (string) $role)));
     }
 
     /** Short description of a facility list, for the settings page. */

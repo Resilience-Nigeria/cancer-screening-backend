@@ -36,12 +36,17 @@ class OverdueResults
     {
         if (self::isNational($user)) return null;
         if (self::isAdmin($user)) return $user->visibleFacilityIds();
+        // People whose facilities are assigned to them (e.g. NICRAT Staff, Partners set up that way):
+        // all of their assigned facilities, or every facility when they were given all.
+        if (method_exists($user, 'allRoles') && $user->allRoles()->contains(fn ($r) => $r->dataScopeType === 'assigned')) {
+            return $user->visibleFacilityIds();
+        }
         return $user->facilityId ? [(int) $user->facilityId] : [];
     }
 
     public static function scopeLabel($user): string
     {
-        if (self::isNational($user)) return 'all';
+        if (self::isNational($user) || self::facilitiesFor($user) === null) return 'all';
         if (self::isAdmin($user)) return 'facilities';
         return 'facility';
     }

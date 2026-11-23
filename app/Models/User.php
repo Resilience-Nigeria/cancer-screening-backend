@@ -6,7 +6,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class User extends Authenticatable implements JWTSubject
 {
@@ -23,12 +25,23 @@ class User extends Authenticatable implements JWTSubject
         'role',
         'status',
         'organization_id',
+        'allFacilities',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
     ];
+
+    protected $casts = [
+        'allFacilities' => 'boolean',
+    ];
+
+    /** Every role name, included whenever a user is sent to the frontend (e.g. at login). */
+    protected $appends = ['roleNames'];
+
+    /** Per-request cache of the resolved facility list. */
+    private $visibleCache = false;
 
     public function facility(): BelongsTo
     {
@@ -38,20 +51,28 @@ class User extends Authenticatable implements JWTSubject
     /**
      * Facilities specifically granted to this individual user, on top
      * of whatever their role's dataScopeType already provides.
+     * For "assigned" roles these ARE the facilities the person sees.
      */
     public function facilityGrants(): HasMany
     {
         return $this->hasMany(UserFacilityGrant::class, 'userId', 'id');
     }
 
-    public function organization()  // ← Add this
-{
-    return $this->belongsTo(Organization::class, 'organization_id');
-}
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class, 'organization_id');
+    }
 
+    /** Main role (users.role). */
     public function user_role(): BelongsTo
     {
         return $this->belongsTo(Role::class, 'role', 'roleId');
+    }
+
+    /** Extra roles (the main role is also stored here). */
+    public function assignedRoles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class, 'user_role_assignments', 'userId', 'roleId');
     }
 
     public function screeningVisits(): HasMany
@@ -74,60 +95,91 @@ class User extends Authenticatable implements JWTSubject
         return [
             'facilityId' => $this->facilityId,
             'role' => $this->user_role?->roleName,
+            'roles' => $this->roleNames(),
         ];
     }
 
+    // ── Roles ───────────────────────────────────────────────────────────────
+
+    /** All of this person's roles: the main role first, then the others. */
+    public function allRoles(): Collection
+    {
+        $roles = collect();
+        if ($this->user_role) $roles->push($this->user_role);
+        try {
+            $roles = $roles->merge($this->assignedRoles);
+        } catch (\Throwable $e) {
+            // user_role_assignments not migrated yet — main role only
+        }
+        return $roles->filter()->unique('roleId')->values();
+    }
+
+    public function roleNames(): array
+    {
+        return $this->allRoles()->pluck('roleName')->filter()->values()->all();
+    }
+
+    public function getRoleNamesAttribute(): array
+    {
+        return $this->roleNames();
+    }
+
+    public function hasRole(string ...$names): bool
+    {
+        return (bool) array_intersect($names, $this->roleNames());
+    }
+
     /**
-     * Role Check Methods
+     * Role Check Methods — true when ANY of the person's roles matches.
      */
     public function isSuperAdmin(): bool
     {
-        return $this->user_role?->roleName === 'NICRAT_SUPER_ADMIN';
+        return $this->hasRole('NICRAT_SUPER_ADMIN');
     }
 
     public function isNicratStaff(): bool
     {
-        return $this->user_role?->roleName === 'NICRAT_ADMIN';
+        return $this->hasRole('NICRAT_ADMIN');
     }
 
     public function isHospitalAdmin(): bool
     {
-        return $this->user_role?->roleName === 'NAVIGATOR';
+        return $this->hasRole('NAVIGATOR');
     }
 
     public function isDataClerk(): bool
     {
-        return $this->user_role?->roleName === 'NURSE';
+        return $this->hasRole('NURSE');
     }
 
     public function isPartner(): bool
     {
-        return $this->user_role?->roleName === 'PARTNER';
+        return $this->hasRole('PARTNER');
     }
 
     public function isDoctor(): bool
     {
-        return $this->user_role?->roleName === 'DOCTOR';
+        return $this->hasRole('DOCTOR');
     }
 
     /**
-     * The genuinely new "Hospital Admin" role — NOT the same as
-     * isHospitalAdmin() above, which is a legacy-named alias for
-     * NAVIGATOR left over from an earlier role rename. Hospital Admin
-     * and Navigator are functionally equivalent for staff-management
-     * purposes (see UserController) but are distinct role identities.
+     * The "Hospital Admin" role — not the same as isHospitalAdmin() above, which is a legacy-named
+     * alias for NAVIGATOR.
      */
     public function isHospitalAdminRole(): bool
     {
-        return $this->user_role?->roleName === 'HOSPITAL_ADMIN';
+        return $this->hasRole('HOSPITAL_ADMIN');
     }
 
-    // Clearer aliases matching the current role names — the isX() methods
-    // above are kept as-is so existing call sites aren't broken by a
-    // rename; new code should prefer these.
     public function isNicratAdmin(): bool
     {
         return $this->isNicratStaff();
+    }
+
+    /** The NICRAT Staff role (all facilities or assigned facilities, per person). */
+    public function isNicratStaffMember(): bool
+    {
+        return $this->hasRole('NICRAT_STAFF');
     }
 
     public function isNavigator(): bool
@@ -140,137 +192,117 @@ class User extends Authenticatable implements JWTSubject
         return $this->isDataClerk();
     }
 
-   
+    // ── Data scope ──────────────────────────────────────────────────────────
+
     /**
-     * Check if user has national-level access (can see all facilities).
-     * Driven entirely by the role's configured dataScopeType — not a
-     * hardcoded role-name list — so changing a role's scope in the
-     * database takes effect everywhere immediately.
+     * The widest scope across all of the person's roles. "assigned" with allFacilities counts as national.
      */
+    public function dataScopeType(): ?string
+    {
+        $scopes = $this->allRoles()->pluck('dataScopeType')->filter()->unique()->values()->all();
+        if (!$scopes) return $this->user_role?->dataScopeType;
+        if (in_array('assigned', $scopes, true) && $this->allFacilities) return 'national';
+        foreach (Role::SCOPE_ORDER as $s) {
+            if (in_array($s, $scopes, true)) return $s;
+        }
+        return $scopes[0];
+    }
+
+    /** Can see every facility. */
     public function hasNationalAccess(): bool
     {
         return $this->dataScopeType() === 'national';
     }
 
-    /**
-     * Check if user has facility-level access (can only see their facility)
-     */
+    /** Limited to some facilities. */
     public function hasFacilityAccess(): bool
     {
-        $roleName = $this->user_role?->roleName;
-        return in_array($roleName, ['NAVIGATOR', 'HOSPITAL_ADMIN', 'NURSE', 'DOCTOR']);
-    }
-
-    public function dataScopeType(): ?string
-    {
-        return $this->user_role?->dataScopeType;
+        return !$this->hasNationalAccess();
     }
 
     /**
-     * The set of facility IDs this user can see, resolved from their
-     * role's configured dataScopeType and their own assigned facility.
-     * Returns null for "national" (no restriction — don't filter at
-     * all), otherwise an array to use with whereIn('facilityId', ...).
-     *
-     * Two users with the same role/scope type but different assigned
-     * facilities get different results here — the scope TYPE is
-     * role-level config, but the resolved facility SET is always
-     * relative to this specific user's own facility.
+     * The facility IDs this user can see: null = all facilities, otherwise the union of what each role gives,
+     * plus individually granted facilities.
+     *   national          -> all
+     *   assigned          -> all when "All facilities" is ticked for the person, else their facility + granted ones
+     *   state / hub / subhub / facility_only -> measured from their own facility
+     * No scope configured on any role fails open to all (a missed configuration, not a lockout).
      */
     public function visibleFacilityIds(): ?array
     {
-        $scope = $this->dataScopeType();
+        if ($this->visibleCache !== false) return $this->visibleCache;
 
-        if ($scope === 'national' || $scope === null) {
-            // No scope configured on the role at all — fail open to
-            // "national" rather than silently locking everyone out,
-            // since that's almost always a missed-configuration bug
-            // rather than an intentional lockout.
-            return null;
+        $roles = $this->allRoles();
+        $scopes = $roles->pluck('dataScopeType')->all();
+
+        if (!$roles->count() || in_array('national', $scopes, true) || in_array(null, $scopes, true)
+            || (in_array('assigned', $scopes, true) && $this->allFacilities)) {
+            return $this->visibleCache = null;
         }
 
         $facility = $this->facility;
-
-        $roleBasedIds = !$facility
-            ? []
-            : match ($scope) {
-                'state' => \App\Models\Facility::where('facilityState', $facility->facilityState)
-                    ->pluck('facilityId')->toArray(),
-
-                'hub_hierarchy' => ($hub = $facility->findAncestorAtLevel('hub'))
-                    ? $hub->descendantFacilityIds()
-                    : [$facility->facilityId],
-
-                'subhub_hierarchy' => ($subhub = $facility->findAncestorAtLevel('subhub'))
-                    ? $subhub->descendantFacilityIds()
-                    : [$facility->facilityId],
-
-                'facility_only' => [$facility->facilityId],
-
+        $ids = [];
+        foreach (array_unique($scopes) as $scope) {
+            if (!$facility) continue;
+            $ids = array_merge($ids, match ($scope) {
+                'state' => Facility::where('facilityState', $facility->facilityState)->pluck('facilityId')->toArray(),
+                'hub_hierarchy' => ($hub = $facility->findAncestorAtLevel('hub')) ? $hub->descendantFacilityIds() : [$facility->facilityId],
+                'subhub_hierarchy' => ($sub = $facility->findAncestorAtLevel('subhub')) ? $sub->descendantFacilityIds() : [$facility->facilityId],
                 default => [$facility->facilityId],
-            };
+            });
+        }
 
-        // Additional individually-granted facilities, on top of whatever
-        // the role scope already provides — never subtracts, only adds.
-        $grantedIds = $this->facilityGrants()->pluck('facilityId')->toArray();
+        $granted = $this->facilityGrants()->pluck('facilityId')->toArray();
 
-        return array_values(array_unique([...$roleBasedIds, ...$grantedIds]));
+        return $this->visibleCache = array_values(array_unique(array_map('intval', [...$ids, ...$granted])));
     }
 
-    /**
-     * Single-record equivalent of visibleFacilityIds() — use this for
-     * authorization checks (e.g. "can this user open this visit?")
-     * rather than list filtering.
-     */
+    /** Clears the cached facility list (after changing roles or facilities). */
+    public function forgetVisibleFacilities(): void
+    {
+        $this->visibleCache = false;
+    }
+
     public function canAccessFacility(?int $facilityId): bool
     {
-        if (!$facilityId) {
-            return false;
-        }
-
+        if (!$facilityId) return false;
         $visible = $this->visibleFacilityIds();
-
-        return $visible === null || in_array($facilityId, $visible, true);
+        return $visible === null || in_array((int) $facilityId, $visible, true);
     }
 
-    /**
-     * Check if user can create other users
-     */
+    // ── User management (from role settings) ────────────────────────────────
+
+    /** Can open User Management. */
+    public function canManageUsers(): bool
+    {
+        return $this->isSuperAdmin() || $this->allRoles()->contains(fn ($r) => (bool) $r->canManageUsers);
+    }
+
     public function canCreateUsers(): bool
     {
-        $roleName = $this->user_role?->roleName;
-        return in_array($roleName, ['NICRAT_SUPER_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN']);
+        return !empty($this->manageableRoleIds());
     }
 
-    /**
-     * Get roles this user can create
-     * NICRAT_SUPER_ADMIN can create: NICRAT_ADMIN, NAVIGATOR, HOSPITAL_ADMIN, PARTNER
-     * NAVIGATOR / HOSPITAL_ADMIN can create: NURSE, DOCTOR
-     */
-    public function getRolesCanCreate(): array
+    /** Role IDs this person may give to others (Super Admin: every staff role except Super Admin). */
+    public function manageableRoleIds(): array
     {
         if ($this->isSuperAdmin()) {
-            return Role::whereIn('roleName', ['NICRAT_ADMIN', 'NAVIGATOR', 'HOSPITAL_ADMIN', 'PARTNER'])->get()->toArray();
+            return Role::where(fn ($q) => $q->whereNull('isStaffRole')->orWhere('isStaffRole', true))
+                ->where('roleName', '!=', 'NICRAT_SUPER_ADMIN')->pluck('roleId')->map(fn ($v) => (int) $v)->all();
         }
-
-        if ($this->isHospitalAdmin() || $this->isHospitalAdminRole()) {
-            return Role::whereIn('roleName', ['NURSE', 'DOCTOR'])->get()->toArray();
-        }
-
-        return [];
+        return $this->allRoles()->flatMap(fn ($r) => $r->manageableRoleIds ?? [])->map(fn ($v) => (int) $v)->unique()->values()->all();
     }
 
-    /**
-     * Scope: Filter by facility
-     */
+    public function getRolesCanCreate(): array
+    {
+        return Role::whereIn('roleId', $this->manageableRoleIds())->get()->toArray();
+    }
+
     public function scopeForFacility($query, $facilityId)
     {
         return $query->where('facilityId', $facilityId);
     }
 
-    /**
-     * Scope: Active users only
-     */
     public function scopeActive($query)
     {
         return $query->where('status', 'active');

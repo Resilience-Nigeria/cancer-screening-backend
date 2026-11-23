@@ -291,6 +291,9 @@ Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'sy
     Route::get('/users/roles', [UserController::class, 'roles']);
     Route::get('/roles', [App\Http\Controllers\Api\RoleController::class, 'index']);
     Route::patch('/roles/{role}/scope', [App\Http\Controllers\Api\RoleController::class, 'updateScope']);
+    Route::post('/roles', [App\Http\Controllers\Api\RoleController::class, 'store']);
+    Route::put('/roles/{role}', [App\Http\Controllers\Api\RoleController::class, 'update']);
+    Route::delete('/roles/{role}', [App\Http\Controllers\Api\RoleController::class, 'destroy']);
     Route::get('/settings', [App\Http\Controllers\Api\SettingsController::class, 'index']);
     Route::patch('/settings', [App\Http\Controllers\Api\SettingsController::class, 'update']);
     Route::get('/notification-providers', [App\Http\Controllers\Api\NotificationProviderController::class, 'index']);
