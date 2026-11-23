@@ -50,7 +50,16 @@ class UserController extends Controller
         }
     }
 
-    private function deny(string $message, int $code = 403): JsonResponse
+    /** Leaves organization_id out when the users table doesn't have it yet (run the migration to add it). */
+    private function withOrg(array $values): array
+    {
+        static $has = null;
+        $has ??= \Illuminate\Support\Facades\Schema::hasColumn('users', 'organization_id');
+        if (!$has) unset($values['organization_id']);
+        return $values;
+    }
+
+        private function deny(string $message, int $code = 403): JsonResponse
     {
         return response()->json(['status' => false, 'message' => $message], $code);
     }
@@ -316,7 +325,7 @@ class UserController extends Controller
 
         $plain = $this->generatePassword();
         $user = DB::transaction(function () use ($request, $a, $plain, $me) {
-            $user = User::create([
+            $user = User::create($this->withOrg([
                 'firstName' => $request->firstName,
                 'lastName' => $request->lastName,
                 'email' => $request->email,
@@ -328,7 +337,7 @@ class UserController extends Controller
                 'organization_id' => $a['organizationId'],
                 'allFacilities' => $a['allFacilities'],
                 'status' => $request->status ?? 'active',
-            ]);
+            ]));
             $this->syncAccess($user, $a, $me);
             return $user;
         });
@@ -387,12 +396,12 @@ class UserController extends Controller
                 'phoneNumber' => $request->phoneNumber ?? $user->phoneNumber,
                 'alternatePhoneNumber' => $request->has('alternatePhoneNumber') ? $request->alternatePhoneNumber : $user->alternatePhoneNumber,
                 'status' => $self ? $user->status : ($request->status ?? $user->status),
-            ] + ($a ? [
+            ] + ($a ? $this->withOrg([
                 'role' => $a['roleIds'][0],
                 'facilityId' => $a['facilityId'],
                 'organization_id' => $a['organizationId'],
                 'allFacilities' => $a['allFacilities'],
-            ] : []));
+            ]) : []));
             if ($request->filled('password')) {
                 $user->update(['password' => Hash::make($request->password)]);
             }
