@@ -37,6 +37,12 @@ return new class extends Migration
             if (!Schema::hasColumn('roles', 'dataScopeType')) $table->string('dataScopeType', 30)->nullable();
         });
 
+        // dataScopeType was an ENUM without "assigned": make it a plain text column so new scopes fit.
+        // (Safe to run again — this migration can be re-run after a failed attempt.)
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE `roles` MODIFY `dataScopeType` VARCHAR(30) NULL");
+        }
+
         Schema::table('users', function (Blueprint $table) {
             if (!Schema::hasColumn('users', 'allFacilities')) $table->boolean('allFacilities')->default(false);
         });
