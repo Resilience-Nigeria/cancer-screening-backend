@@ -186,6 +186,7 @@ Route::post('/report-settings/{key}/recipients', [ReportSettingsController::clas
 Route::get('/report-settings/{key}/audience', [ReportSettingsController::class, 'audience']);
 Route::get('/report-settings/{key}/preview', [ReportSettingsController::class, 'preview']);
 Route::post('/report-settings/{key}/send-test', [ReportSettingsController::class, 'sendTest']);
+Route::post('/report-settings/{key}/send-now', [ReportSettingsController::class, 'sendNow']);
 Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'syncFromVisit']);
 
     Route::get('/users/organizations', [UserController::class, 'getOrganizations']);

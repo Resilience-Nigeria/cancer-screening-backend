@@ -13,6 +13,8 @@ use App\Support\ReportRecipients;
 use App\Support\WeeklySummary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -292,6 +294,91 @@ class ReportSettingsController extends Controller
         return $html === null
             ? response()->json(['subject' => null, 'html' => null, 'message' => $subject])
             : response()->json(['subject' => $subject, 'html' => $html]);
+    }
+
+    private const COMMANDS = [
+        'weekly_summary'  => 'ncsr:weekly-summary',
+        'overdue_results' => 'ncsr:overdue-results',
+    ];
+
+    /** The PHP command-line binary (not php-fpm). Override with REPORTS_PHP_BINARY in .env if needed. */
+    private function phpBinary(): ?string
+    {
+        $env = env('REPORTS_PHP_BINARY');
+        if ($env) return $env;
+        $found = (new \Symfony\Component\Process\PhpExecutableFinder())->find(false);
+        if ($found && !str_contains(basename($found), 'fpm')) return $found;
+        foreach (['/usr/bin/php', '/usr/local/bin/php'] as $p) {
+            if (is_executable($p)) return $p;
+        }
+        return null;
+    }
+
+    private function canRunInBackground(): bool
+    {
+        if (!function_exists('exec')) return false;
+        $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+        return !in_array('exec', $disabled, true);
+    }
+
+    /**
+     * POST /report-settings/{key}/send-now
+     * Sends the report to everyone on its list right away (Send now / Remind now). The scheduled send still
+     * happens as usual. Runs in the background so the page doesn't wait for every email; falls back to sending
+     * during the request when the server doesn't allow background commands.
+     */
+    public function sendNow(string $key): JsonResponse
+    {
+        $user = $this->admin();
+        $key = $this->key($key);
+
+        $people = count(ReportRecipients::resolve($key));
+        if ($people === 0) {
+            return response()->json(['message' => 'Nobody is on this list yet. Add recipients first.'], 422);
+        }
+
+        // One "send now" per report at a time (stops double clicks sending twice).
+        $lock = "reports:send-now:{$key}";
+        if (!Cache::add($lock, $user->id, now()->addMinutes(5))) {
+            return response()->json(['message' => 'This report is already being sent. Please wait a few minutes before sending again.'], 429);
+        }
+
+        $title = strtolower(ReportRecipients::REPORTS[$key]);
+        $name = trim(($user->firstName ?? '') . ' ' . ($user->lastName ?? '')) ?: $user->email;
+        $this->log("{$name} sent the {$title} now (outside the schedule).", ['report' => $key, 'recipients' => $people]);
+
+        $command = self::COMMANDS[$key];
+        $php = $this->phpBinary();
+
+        if ($php && $this->canRunInBackground()) {
+            $log = storage_path('logs/reports-send-now.log');
+            $line = sprintf(
+                'cd %s && nohup %s artisan %s >> %s 2>&1 &',
+                escapeshellarg(base_path()),
+                escapeshellarg($php),
+                $command,
+                escapeshellarg($log)
+            );
+            exec($line);
+            return response()->json([
+                'message' => $key === 'overdue_results'
+                    ? "Sending reminders now to the {$people} people on the list who have overdue results. It takes a minute or two."
+                    : "Sending the weekly summary now to {$people} " . ($people === 1 ? 'person' : 'people') . '. It takes a minute or two.',
+                'background' => true,
+                'recipients' => $people,
+            ]);
+        }
+
+        // No background commands on this server: send now, while the page waits.
+        @set_time_limit(0);
+        try {
+            Artisan::call($command, ['--pause' => 0.5]);
+            $out = trim(Artisan::output());
+        } finally {
+            Cache::forget($lock);
+        }
+        $last = collect(preg_split('/\R/', $out))->filter()->last();
+        return response()->json(['message' => $last ?: 'Sent.', 'background' => false, 'recipients' => $people, 'output' => $out]);
     }
 
     /** POST /report-settings/{key}/send-test — send the report (all facilities) to the signed-in admin now */
