@@ -37,6 +37,8 @@ use App\Http\Controllers\Api\ScreenedClientController;
 use App\Http\Controllers\Api\ReferredClientController;
 use App\Http\Controllers\Api\ReportSettingsController;
 
+use App\Http\Controllers\Api\{FollowUpController, ResultCommunicationController, StaffDeviceController,
+    StockController, StaffChatController, MobileSupportController};
 
 
 use Illuminate\Support\Facades\Route;
@@ -195,6 +197,11 @@ Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'sy
     Route::post('/clients', [ClientController::class, 'store']);
     Route::get('/clients/search/details', [ClientController::class, 'search']);
     Route::get('/clients/check-duplicate', [ClientController::class, 'checkDuplicate']);
+
+        Route::get('/clients/list', [\App\Http\Controllers\Api\ClientListController::class, 'index']);
+    Route::get('/clients/mine', [\App\Http\Controllers\Api\MyClientsController::class, 'index']);
+    Route::get('/screening-samples/list', [\App\Http\Controllers\Api\SampleListController::class, 'index']);
+
     Route::get('/clients/linked', [ClientController::class, 'linked']);
     Route::get('/self-assessments', [SelfAssessmentController::class, 'index']);
     Route::get('/clients/id-change-access', [ClientController::class, 'idChangeAccess']);
@@ -332,4 +339,84 @@ Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'sy
     Route::get('/indigency-support', [App\Http\Controllers\Api\IndigencySupportController::class, 'index']);
 
 
+    // NCSR Mobile App: push registration + notification bell
+    Route::post('/mobile/push-token', [\App\Http\Controllers\Api\MobileNotificationController::class, 'registerToken']);
+    Route::delete('/mobile/push-token', [\App\Http\Controllers\Api\MobileNotificationController::class, 'removeToken']);
+    Route::get('/mobile/notifications', [\App\Http\Controllers\Api\MobileNotificationController::class, 'index']);
+    Route::get('/mobile/notifications/unread-count', [\App\Http\Controllers\Api\MobileNotificationController::class, 'unreadCount']);
+    Route::post('/mobile/notifications/read-all', [\App\Http\Controllers\Api\MobileNotificationController::class, 'markAllRead']);
+    Route::post('/mobile/notifications/{id}/read', [\App\Http\Controllers\Api\MobileNotificationController::class, 'markRead'])->whereNumber('id');
+    Route::post('/mobile/push-test', [\App\Http\Controllers\Api\MobileNotificationController::class, 'test']);
+
+    // Web dashboard: send notifications to staff (super admin / NICRAT admin)
+    Route::get('/staff-notifications', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'index']);
+    Route::get('/staff-notifications/options', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'options']);
+    Route::post('/staff-notifications/preview', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'preview']);
+    Route::post('/staff-notifications', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'send']);
+
+  Route::get('/staff-notifications/{id}/recipients', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'recipients'])->whereNumber('id');
+    Route::put('/staff-notifications/{id}', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'update'])->whereNumber('id');
+    Route::post('/staff-notifications/{id}/resend', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'resend'])->whereNumber('id');
+    Route::delete('/staff-notifications/{id}', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'withdraw'])->whereNumber('id');
+
+    // Follow-ups & recalls + SMS to clients
+Route::get('/mobile/follow-ups', [FollowUpController::class, 'index']);
+Route::get('/mobile/follow-ups/history', [FollowUpController::class, 'history']);
+Route::post('/mobile/follow-ups/contact', [FollowUpController::class, 'contact']);
+Route::post('/mobile/sms', [FollowUpController::class, 'sms']);
+
+// Results back to the client
+Route::get('/mobile/results/communicated', [ResultCommunicationController::class, 'forClient']);
+Route::get('/mobile/results/{sampleId}/communication', [ResultCommunicationController::class, 'show'])->whereNumber('sampleId');
+Route::post('/mobile/results/{sampleId}/communication', [ResultCommunicationController::class, 'store'])->whereNumber('sampleId');
+
+// Phone security (heartbeat, remote sign-out / wipe)
+Route::post('/mobile/devices/heartbeat', [StaffDeviceController::class, 'heartbeat']);
+Route::post('/mobile/devices/done', [StaffDeviceController::class, 'done']);
+Route::get('/mobile-admin/devices', [StaffDeviceController::class, 'index']);
+Route::post('/mobile-admin/devices/{id}/sign-out', [StaffDeviceController::class, 'signOut'])->whereNumber('id');
+Route::post('/mobile-admin/devices/{id}/wipe', [StaffDeviceController::class, 'wipe'])->whereNumber('id');
+Route::post('/mobile-admin/devices/{id}/cancel', [StaffDeviceController::class, 'cancel'])->whereNumber('id');
+
+// Stock
+Route::get('/stock', [StockController::class, 'index']);
+Route::get('/stock/overview', [StockController::class, 'overview']);
+Route::get('/stock/movements', [StockController::class, 'movements']);
+Route::get('/stock/check', [StockController::class, 'check']);
+Route::post('/stock/receive', [StockController::class, 'receive']);
+Route::post('/stock/adjust', [StockController::class, 'adjust']);
+Route::post('/stock/expired', [StockController::class, 'expired']);
+Route::post('/stock/transfer', [StockController::class, 'transfer']);
+Route::put('/stock/level', [StockController::class, 'setLowLevel']);
+
+// Staff directory & chat
+Route::get('/mobile/staff', [StaffChatController::class, 'directory']);
+Route::get('/mobile/staff/{id}', [StaffChatController::class, 'profile'])->whereNumber('id');
+Route::get('/mobile/chats', [StaffChatController::class, 'index']);
+Route::get('/mobile/chats/unread-count', [StaffChatController::class, 'unreadCount']);
+Route::post('/mobile/chats', [StaffChatController::class, 'open']);
+Route::get('/mobile/chats/{id}/messages', [StaffChatController::class, 'messages'])->whereNumber('id');
+Route::post('/mobile/chats/{id}/messages', [StaffChatController::class, 'send'])->whereNumber('id');
+Route::post('/mobile/chats/{id}/read', [StaffChatController::class, 'read'])->whereNumber('id');
+
+// Help: problem reports & crash reports
+Route::post('/mobile/support-tickets', [MobileSupportController::class, 'report']);
+Route::post('/mobile/error-reports', [MobileSupportController::class, 'errors']);
+Route::get('/mobile-admin/tickets', [MobileSupportController::class, 'tickets']);
+Route::post('/mobile-admin/tickets/{id}/resolve', [MobileSupportController::class, 'resolve'])->whereNumber('id');
+Route::get('/mobile-admin/errors', [MobileSupportController::class, 'errorSummary']);
+
+
+
+    // Stock Management (web)
+    Route::get('/stock-admin/meta', [\App\Http\Controllers\Api\StockAdminController::class, 'meta']);
+    Route::get('/stock-admin/matrix', [\App\Http\Controllers\Api\StockAdminController::class, 'matrix']);
+    Route::post('/stock-admin/receive-bulk', [\App\Http\Controllers\Api\StockAdminController::class, 'receiveBulk']);
+    Route::get('/stock-admin/movements', [\App\Http\Controllers\Api\StockAdminController::class, 'movements']);
+    Route::get('/stock-admin/movements/export', [\App\Http\Controllers\Api\StockAdminController::class, 'export']);
+    Route::get('/stock-admin/expiring', [\App\Http\Controllers\Api\StockAdminController::class, 'expiring']);
+    Route::get('/stock-admin/items', [\App\Http\Controllers\Api\StockAdminController::class, 'items']);
+    Route::post('/stock-admin/items', [\App\Http\Controllers\Api\StockAdminController::class, 'storeItem']);
+    Route::put('/stock-admin/items/{id}', [\App\Http\Controllers\Api\StockAdminController::class, 'updateItem'])->whereNumber('id');
+    
 });

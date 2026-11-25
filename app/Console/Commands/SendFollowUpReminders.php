@@ -2,150 +2,54 @@
 
 namespace App\Console\Commands;
 
-use App\Models\FollowUpSchedule;
-use App\Models\Setting;
-use App\Services\BrevoService;
-use App\Services\BulkSmsService;
-use App\Services\TwilioSmsService;
-use App\Services\WhatsAppService;
+use App\Models\Client;
+use App\Models\ScreeningSample;
+use App\Models\SmsLog;
+use App\Services\SmsService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Carbon;
 
+/**
+ * Daily: SMS reminder the day before a repeat screening or a booked test.
+ *   php artisan ncsr:followup-reminders            (send)
+ *   php artisan ncsr:followup-reminders --dry-run  (list who would get one)
+ */
 class SendFollowUpReminders extends Command
 {
-    protected $signature = 'followups:send-reminders';
-    protected $description = 'Send reminders for upcoming follow-ups, flag missed ones, and escalate overdue reviews (Stage 4, Section 4.11)';
-
-    public function __construct(
-        protected WhatsAppService $whatsapp,
-        protected BulkSmsService $bulkSms,
-        protected TwilioSmsService $twilioSms,
-        protected BrevoService $brevo,
-    ) {
-        parent::__construct();
-    }
+    protected $signature = 'ncsr:followup-reminders {--dry-run}';
+    protected $description = 'SMS clients the day before a repeat screening or a booked test';
 
     public function handle(): int
     {
-        $this->sendUpcomingReminders();
-        $this->flagMissedFollowUps();
-        $this->escalateOverdue();
+        $tomorrow = Carbon::tomorrow();
+        $date = $tomorrow->format('j M Y');
+        $jobs = collect();
 
-        return self::SUCCESS;
-    }
+        if (class_exists(\App\Models\FollowUpSchedule::class)) {
+            foreach (\App\Models\FollowUpSchedule::where('status', 'pending')->whereDate('dueDate', $tomorrow)->get() as $s) {
+                $jobs->push(['clientId' => $s->clientId, 'purpose' => 'recall', 'facilityId' => null]);
+            }
+        }
+        foreach (ScreeningSample::where('status', 'booked')->whereDate('sampleDate', $tomorrow)->get() as $s) {
+            $jobs->push(['clientId' => $s->clientId, 'purpose' => 'booked_test', 'facilityId' => $s->bookedFacilityId ?? $s->facilityId]);
+        }
 
-    /**
-     * Resolves whichever provider is marked default for this channel in
-     * notification_providers. Adding a new provider later is a case
-     * here once its Service class exists, not a rewire of every caller
-     * that sends an SMS.
-     */
-    protected function sendSms(string $to, string $message): bool
-    {
-        $provider = \App\Models\NotificationProvider::getDefault('sms');
-
-        return match ($provider?->providerKey ?? 'bulksms') {
-            'twilio' => $this->twilioSms->send($to, $message),
-            'bulksms' => $this->bulkSms->send($to, $message),
-            default => $this->bulkSms->send($to, $message),
-        };
-    }
-
-    /**
-     * Same pattern for email.
-     */
-    protected function sendEmail(string $to, string $name, string $subject, string $message): bool
-    {
-        $provider = \App\Models\NotificationProvider::getDefault('email');
-
-        return match ($provider?->providerKey ?? 'brevo') {
-            'brevo' => $this->brevo->sendTransactional(to: $to, name: $name, subject: $subject, message: $message),
-            default => $this->brevo->sendTransactional(to: $to, name: $name, subject: $subject, message: $message),
-        };
-    }
-
-    /**
-     * Remind clients whose follow-up is due within the configured
-     * window and hasn't already had a reminder sent.
-     */
-    protected function sendUpcomingReminders(): void
-    {
-        $daysBefore = Setting::get('follow_up_reminder_days_before', 7);
-        $whatsappEnabled = Setting::get('whatsapp_enabled', true);
-
-        $upcoming = FollowUpSchedule::with('treatmentPlan.client')
-            ->where('status', 'pending')
-            ->whereNull('reminderSentAt')
-            ->whereBetween('dueDate', [now()->toDateString(), now()->addDays($daysBefore)->toDateString()])
-            ->get();
-
-        foreach ($upcoming as $schedule) {
-            $client = $schedule->treatmentPlan?->client;
-            if (!$client || !$client->phoneNumber) {
+        $sent = 0;
+        foreach ($jobs->unique(fn ($j) => $j['clientId'] . $j['purpose']) as $j) {
+            $c = Client::with('facility')->find($j['clientId']);
+            if (!$c) continue;
+            $already = SmsLog::where('clientId', $c->clientId)->where('purpose', $j['purpose'])->where('created_at', '>=', now()->subDay())->exists();
+            if ($already) continue;
+            $fac = $j['facilityId'] ? (\App\Models\Facility::find($j['facilityId'])->facilityName ?? null) : ($c->facility->facilityName ?? null);
+            $text = SmsService::template($j['purpose'], ['name' => $c->fullName, 'facility' => $fac, 'date' => $date]);
+            if ($this->option('dry-run')) {
+                $this->line("{$c->clientId} {$c->phoneNumber}: {$text}");
                 continue;
             }
-
-            $message = "Hello {$client->fullName}, this is a reminder that your follow-up appointment "
-                . "({$schedule->activities}) is due on {$schedule->dueDate}. Please contact your facility to schedule your visit.";
-
-            $sent = $whatsappEnabled ? $this->whatsapp->send($client->phoneNumber, $message) : false;
-            if (!$sent) {
-                $sent = $this->sendSms($client->phoneNumber, $message);
-            }
-            if (!$sent && $client->email) {
-                $this->sendEmail($client->email, $client->fullName, 'Upcoming Follow-up Appointment', $message);
-            }
-
-            $schedule->update(['reminderSentAt' => now()]);
-
-            Log::info('Follow-up reminder sent', ['scheduleId' => $schedule->scheduleId, 'clientId' => $client->clientId]);
+            $r = SmsService::send($c->phoneNumber ?: ($c->caregiverPhoneNumber ?? null), $text, $j['purpose'], $c->clientId);
+            if ($r['ok']) $sent++;
         }
-
-        $this->info("Sent {$upcoming->count()} follow-up reminders.");
-    }
-
-    /**
-     * Anything more than the configured window past due and still
-     * pending gets flagged as missed.
-     */
-    protected function flagMissedFollowUps(): void
-    {
-        $missedAfterDays = Setting::get('follow_up_missed_after_days', 14);
-
-        $missedCount = FollowUpSchedule::where('status', 'pending')
-            ->where('dueDate', '<', now()->subDays($missedAfterDays)->toDateString())
-            ->update(['status' => 'missed']);
-
-        $this->info("Flagged {$missedCount} follow-ups as missed.");
-    }
-
-    /**
-     * Missed follow-ups that haven't already had an escalation sent get
-     * one — a stronger notice, distinct from the routine reminder,
-     * covering the "escalation alerts for overdue reviews or incomplete
-     * treatment" requirement.
-     */
-    protected function escalateOverdue(): void
-    {
-        $overdue = FollowUpSchedule::with('treatmentPlan.client', 'treatmentPlan.facility')
-            ->where('status', 'missed')
-            ->whereNull('escalationSentAt')
-            ->get();
-
-        foreach ($overdue as $schedule) {
-            $client = $schedule->treatmentPlan?->client;
-            $facility = $schedule->treatmentPlan?->facility;
-
-            if ($facility && $facility->email) {
-                $message = "URGENT: {$client?->fullName} ({$client?->clientId}) has a missed follow-up "
-                    . "that was due on {$schedule->dueDate} ({$schedule->activities}). Please follow up urgently.";
-
-                $this->sendEmail($facility->email, $facility->facilityName, 'Overdue Follow-up Escalation', $message);
-            }
-
-            $schedule->update(['escalationSentAt' => now()]);
-        }
-
-        $this->info("Escalated {$overdue->count()} overdue follow-ups.");
+        $this->info(($this->option('dry-run') ? 'Would send ' . $jobs->count() : "Sent {$sent}") . ' reminder(s).');
+        return self::SUCCESS;
     }
 }

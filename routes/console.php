@@ -19,3 +19,4 @@ Schedule::command('followups:send-reminders')->daily();
 //     ->appendOutputTo(storage_path('logs/overdue-results.log'));
 
     Schedule::command('ncsr:reports-dispatch')->everyFiveMinutes()->withoutOverlapping();
+    Schedule::command('ncsr:followup-reminders')->dailyAt('08:30');
