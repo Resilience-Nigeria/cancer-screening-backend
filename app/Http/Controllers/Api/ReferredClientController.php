@@ -44,6 +44,10 @@ class ReferredClientController extends Controller
         $from = $request->query('dateFrom') ?: null;
         $to = $request->query('dateTo') ?: null;
         $perPage = max(1, min((int) $request->query('perPage', 20), 100));
+        $facilityFilter = $request->filled('facilityId') && $request->facilityId !== 'all' ? (int) $request->facilityId : null;
+        if ($facilityFilter && $visible !== null && !in_array($facilityFilter, array_map('intval', $visible), true)) {
+            $facilityFilter = null; // not one of theirs: ignore
+        }
 
         // "Sent" side: the sending facility, or the client's own facility for older rows without one.
         $sentBy = function ($q) use ($visible) {
@@ -69,6 +73,8 @@ class ReferredClientController extends Controller
                 }
             })
             ->when($request->query('type'), fn ($q, $v) => $q->where('referralType', $v))
+            // One hospital (national users, or one of the user's own facilities): referrals sent from or to it.
+            ->when($facilityFilter, fn ($q) => $q->where(fn ($w) => $w->where('toFacilityId', $facilityFilter)->orWhere('fromFacilityId', $facilityFilter)))
             ->when($from, fn ($q, $v) => $q->whereDate('referralDate', '>=', $v))
             ->when($to, fn ($q, $v) => $q->whereDate('referralDate', '<=', $v))
             ->when($search !== '', function ($q) use ($search) {
@@ -88,7 +94,7 @@ class ReferredClientController extends Controller
         // Marked "Referred" on the screening form, no referral record yet. These belong to the sending side.
         $formOnly = $direction === 'received' || $request->query('type')
             ? collect()
-            : Referrals::formOnly($visible, $from, $to, $search);
+            : Referrals::formOnly($facilityFilter ? [$facilityFilter] : $visible, $from, $to, $search);
 
         $currentPage = max(1, (int) $request->query('page', 1));
 

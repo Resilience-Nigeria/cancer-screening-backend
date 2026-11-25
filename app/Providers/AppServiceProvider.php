@@ -41,8 +41,9 @@ public function register(): void
                     $openApi->secure(\Dedoc\Scramble\Support\Generator\SecurityScheme::http('bearer', 'JWT'));
                 });
         }
-          \App\Models\ClientReferral::observe(\App\Observers\StaffNotificationObserver::class);
-    \App\Models\SampleDeletionRequest::observe(\App\Observers\StaffNotificationObserver::class);
-    \App\Models\ScreeningSample::observe(\App\Observers\StockSampleObserver::class);
+            \App\Models\ClientReferral::observe(\App\Observers\StaffNotificationObserver::class);
+            \App\Models\SampleDeletionRequest::observe(\App\Observers\StaffNotificationObserver::class);
+            \App\Models\ScreeningSample::observe(\App\Observers\StockSampleObserver::class);
+            \App\Models\Client::observe(\App\Observers\ClientRegistrarObserver::class);
     }
 }
