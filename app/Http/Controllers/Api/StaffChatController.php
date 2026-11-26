@@ -7,20 +7,65 @@ use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\User;
 use App\Services\StaffPushService;
+use App\Support\StaffPhoto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * Staff directory (find colleagues at any facility) and one-to-one chat.
- * Every signed-in staff member can find others; clients (CLIENT role) are never listed.
- * New messages are pushed to the other person's phone.
+ * Who can find whom:
+ *  - nurses and navigators see only other nurses and navigators (at any facility);
+ *  - admins (super admin, NICRAT admin, hospital admin) and other roles see everyone.
+ * A nurse or navigator can still reply when an admin starts a conversation with them.
+ * Clients (CLIENT role) are never listed. New messages are pushed to the other person's phone.
  */
 class StaffChatController extends Controller
 {
+    /** Roles that only see each other in the staff directory. */
+    private const PEER_ROLES = ['NURSE', 'NAVIGATOR'];
+
     private function me(): User
     {
         return auth('api')->user();
+    }
+
+    /** True when this user only sees nurses and navigators. */
+    private function peersOnly(User $u): bool
+    {
+        if ($u->isSuperAdmin() || $u->isNicratStaff() || $u->hasRole('HOSPITAL_ADMIN')) return false;
+        foreach (self::PEER_ROLES as $r) {
+            if ($u->hasRole($r)) return true;
+        }
+        return false;
+    }
+
+    /** Limit a users query to people holding one of these roles (main role or extra assigned roles). */
+    private function withRoles($q, array $roles)
+    {
+        $hasRoleColumn = Schema::hasColumn('users', 'role');
+        return $q->where(fn ($w) => $w->when($hasRoleColumn, fn ($x) => $x->orWhereIn('role', $roles))
+            ->orWhereHas('user_role', fn ($r) => $r->whereIn('roleName', $roles))
+            ->orWhereHas('assignedRoles', fn ($r) => $r->whereIn('roleName', $roles)));
+    }
+
+    private function isPeer(User $u): bool
+    {
+        foreach (self::PEER_ROLES as $r) {
+            if ($u->hasRole($r)) return true;
+        }
+        return false;
+    }
+
+    private function existingChat(int $a, int $b): ?ChatConversation
+    {
+        return ChatConversation::where('userA', min($a, $b))->where('userB', max($a, $b))->first();
+    }
+
+    /** May $me see / message $other? */
+    private function canReach(User $me, User $other): bool
+    {
+        return !$this->peersOnly($me) || $this->isPeer($other) || $this->existingChat($me->id, $other->id) !== null;
     }
 
     private function card(User $u): array
@@ -36,6 +81,7 @@ class StaffChatController extends Controller
             'facilityId' => $u->facilityId,
             'email' => $u->email,
             'phone' => $u->phoneNumber,
+            'photoUrl' => StaffPhoto::url($u),
         ];
     }
 
@@ -52,13 +98,17 @@ class StaffChatController extends Controller
             ->when($search !== '', fn ($x) => $x->where(fn ($w) => $w->where('firstName', 'like', "%{$search}%")->orWhere('lastName', 'like', "%{$search}%")
                 ->orWhere('email', 'like', "%{$search}%")->orWhereHas('facility', fn ($f) => $f->where('facilityName', 'like', "%{$search}%"))))
             ->orderBy('firstName');
+        if ($this->peersOnly($me)) $this->withRoles($q, self::PEER_ROLES);
+        $role = strtoupper((string) $request->query('role', ''));
+        if ($role !== '') $this->withRoles($q, [$role]);
         $page = $q->paginate(30);
-        $role = (string) $request->query('role', '');
         $rows = collect($page->items())
             ->filter(fn ($u) => array_diff($u->roleNames(), ['CLIENT']) !== [])
-            ->filter(fn ($u) => $role === '' || $u->hasRole($role))
             ->map(fn ($u) => $this->card($u))->values();
-        return response()->json(['data' => $rows, 'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'total' => $page->total()]);
+        return response()->json([
+            'data' => $rows, 'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'total' => $page->total(),
+            'peersOnly' => $this->peersOnly($me),
+        ]);
     }
 
     /** GET /mobile/staff/{id} */
@@ -66,6 +116,7 @@ class StaffChatController extends Controller
     {
         $u = User::with(['facility', 'user_role', 'assignedRoles'])->findOrFail($id);
         abort_if(array_diff($u->roleNames(), ['CLIENT']) === [], 404);
+        abort_if(!$this->canReach($this->me(), $u), 404);
         return response()->json(['staff' => $this->card($u)]);
     }
 
@@ -109,11 +160,13 @@ class StaffChatController extends Controller
     /** POST /mobile/chats { userId } — open (or create) the conversation with someone */
     public function open(Request $request): JsonResponse
     {
-        $me = $this->me()->id;
+        $meUser = $this->me();
+        $me = $meUser->id;
         $other = (int) $request->validate(['userId' => ['required', 'integer', 'exists:users,id']])['userId'];
         abort_if($other === $me, 422, 'You cannot chat with yourself.');
-        $c = ChatConversation::firstOrCreate(['userA' => min($me, $other), 'userB' => max($me, $other)]);
         $o = User::with(['facility', 'user_role', 'assignedRoles'])->find($other);
+        abort_if(!$this->canReach($meUser, $o), 403, 'You can message other nurses and navigators. To reach an administrator, use Help → Report a problem.');
+        $c = ChatConversation::firstOrCreate(['userA' => min($me, $other), 'userB' => max($me, $other)]);
         return response()->json(['chat' => ['id' => $c->id, 'with' => $this->card($o)]]);
     }
 

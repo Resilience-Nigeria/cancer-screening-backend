@@ -39,7 +39,7 @@ use App\Http\Controllers\Api\ReportSettingsController;
 
 use App\Http\Controllers\Api\{FollowUpController, ResultCommunicationController, StaffDeviceController,
     StockController, StaffChatController, MobileSupportController};
-
+use App\Http\Controllers\Api\AppReleaseController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -419,4 +419,25 @@ Route::get('/mobile-admin/errors', [MobileSupportController::class, 'errorSummar
     Route::post('/stock-admin/items', [\App\Http\Controllers\Api\StockAdminController::class, 'storeItem']);
     Route::put('/stock-admin/items/{id}', [\App\Http\Controllers\Api\StockAdminController::class, 'updateItem'])->whereNumber('id');
     
+
+    Route::get('/mobile-admin/releases', [AppReleaseController::class, 'index']);
+Route::post('/mobile-admin/releases', [AppReleaseController::class, 'store']);
+Route::patch('/mobile-admin/releases/{id}', [AppReleaseController::class, 'update'])->whereNumber('id');
+Route::delete('/mobile-admin/releases/{id}', [AppReleaseController::class, 'destroy'])->whereNumber('id');
+
+Route::get('/mobile/profile/photo', [\App\Http\Controllers\Api\ProfilePhotoController::class, 'show']);
+Route::post('/mobile/profile/photo', [\App\Http\Controllers\Api\ProfilePhotoController::class, 'store']);
+Route::delete('/mobile/profile/photo', [\App\Http\Controllers\Api\ProfilePhotoController::class, 'destroy']);
+
+Route::get('/mobile/app-promo', [\App\Http\Controllers\Api\MobileAppPromoController::class, 'forMe']);
+Route::get('/mobile-admin/app-promo', [\App\Http\Controllers\Api\MobileAppPromoController::class, 'show']);
+Route::put('/mobile-admin/app-promo', [\App\Http\Controllers\Api\MobileAppPromoController::class, 'update']);
+
 });
+
+
+Route::get('/mobile/app-version', [AppReleaseController::class, 'latest']);
+Route::get('/mobile/app-latest', [AppReleaseController::class, 'latestApk']);   // always the newest APK — share this link
+Route::get('/mobile-app/download/{id}/{token}', [AppReleaseController::class, 'download'])->whereNumber('id');
+
+Route::get('/staff-photos/{file}', [\App\Http\Controllers\Api\ProfilePhotoController::class, 'file']);
