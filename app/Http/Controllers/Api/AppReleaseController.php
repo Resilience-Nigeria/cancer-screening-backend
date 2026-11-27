@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -86,16 +87,23 @@ class AppReleaseController extends Controller
     }
 
     /** GET /mobile-app/download/{id}/{token} — public, the APK itself (the token makes the link unguessable). */
-    public function download(int $id, string $token): StreamedResponse
+    public function download(Request $request, int $id, string $token): BinaryFileResponse
     {
         $r = AppRelease::where('id', $id)->where('token', $token)->whereNotNull('apkPath')->firstOrFail();
         abort_if(!Storage::disk(self::DISK)->exists($r->apkPath), 404, 'The APK file is missing on the server.');
-        AppRelease::where('id', $r->id)->increment('downloads');
-        $name = "NCSR-Mobile-{$r->version}.apk";
-        return Storage::disk(self::DISK)->download($r->apkPath, $name, [
+        // A 30–60 MB file on a slow phone connection takes minutes: don't let PHP's time limit cut it off
+        // part-way (that left phones with a half file → "There was a problem parsing the package").
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+        if (!$request->headers->has('Range')) AppRelease::where('id', $r->id)->increment('downloads');
+        // Sent as a plain file: the web server streams it efficiently, with Content-Length and support for
+        // resuming an interrupted download (HTTP Range requests).
+        $response = response()->download(Storage::disk(self::DISK)->path($r->apkPath), "NCSR-Mobile-{$r->version}.apk", [
             'Content-Type' => 'application/vnd.android.package-archive',
-            'Content-Length' => (string) Storage::disk(self::DISK)->size($r->apkPath),
+            'Cache-Control' => 'public, max-age=86400',
         ]);
+        $response->headers->set('Accept-Ranges', 'bytes');
+        return $response;
     }
 
     /** GET /mobile/app-latest — public: a plain link that always gets the newest APK (handy to share on WhatsApp). */
