@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BreastScreening extends Model
 {
+    use \App\Models\Concerns\BreastCbeExtras;
+    
     protected $table = 'breast_screenings';
 
     protected $primaryKey = 'screeningId';

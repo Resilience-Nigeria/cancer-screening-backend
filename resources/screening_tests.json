@@ -335,6 +335,44 @@
       ],
       "extraFields": [
         {
+          "name": "leftCbeResult",
+          "label": "Left breast — CBE result",
+          "type": "select",
+          "options": [
+            {
+              "value": "normal",
+              "label": "Normal"
+            },
+            {
+              "value": "lump_detected",
+              "label": "Lump detected"
+            },
+            {
+              "value": "lump_not_detected",
+              "label": "Lump not detected (other changes)"
+            }
+          ]
+        },
+        {
+          "name": "rightCbeResult",
+          "label": "Right breast — CBE result",
+          "type": "select",
+          "options": [
+            {
+              "value": "normal",
+              "label": "Normal"
+            },
+            {
+              "value": "lump_detected",
+              "label": "Lump detected"
+            },
+            {
+              "value": "lump_not_detected",
+              "label": "Lump not detected (other changes)"
+            }
+          ]
+        },
+        {
           "name": "leftCbeFinding",
           "label": "Left breast",
           "type": "select",
@@ -368,7 +406,7 @@
         },
         {
           "name": "breastLumps",
-          "label": "Breast lumps",
+          "label": "History of breast lumps",
           "type": "select",
           "options": [
             {
@@ -387,7 +425,7 @@
         },
         {
           "name": "breastNippleDischarge",
-          "label": "Breast / nipple discharge",
+          "label": "Nipple discharge",
           "type": "select",
           "options": [
             {
@@ -435,7 +473,7 @@
         },
         {
           "name": "skinChanges",
-          "label": "Skin appearance changes",
+          "label": "Skin changes (discoloration, dimpling, thickening or ulceration)",
           "type": "select",
           "options": [
             {
@@ -450,7 +488,7 @@
         },
         {
           "name": "breastPain",
-          "label": "Breast pain",
+          "label": "Breast tenderness",
           "type": "select",
           "options": [
             {
@@ -902,14 +940,18 @@
     {
       "key": "breast_biopsy",
       "cancerType": "breast",
-      "label": "Breast biopsy / FNA",
+      "label": "Breast biopsy",
       "refPrefix": "BBX",
       "kind": "specimen",
       "sex": "any",
       "specimenTypes": [
+        "Fine needle aspiration (FNA)",
         "Core needle biopsy",
-        "Fine needle aspirate",
-        "Excision biopsy"
+        "Vacuum-assisted biopsy",
+        "Excision biopsy",
+        "Incision biopsy",
+        "Punch biopsy (skin)",
+        "Other"
       ],
       "results": [
         {

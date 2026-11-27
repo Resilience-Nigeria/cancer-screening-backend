@@ -115,6 +115,12 @@ Route::post('/otp/resend', [OtpController::class, 'resend']);
 
 Route::match(['GET', 'POST'], '/webhooks/whatsapp', [WhatsAppWebhookController::class, 'handle']);
 
+// ── Mobile app: public (no sign-in) ────────────────────────────────────
+Route::get('/mobile/app-version', [\App\Http\Controllers\Api\AppReleaseController::class, 'latest']);
+Route::get('/mobile/app-latest', [\App\Http\Controllers\Api\AppReleaseController::class, 'latestApk']);
+Route::get('/mobile-app/download/{id}/{token}', [\App\Http\Controllers\Api\AppReleaseController::class, 'download'])->whereNumber('id');
+Route::get('/staff-photos/{file}', [\App\Http\Controllers\Api\ProfilePhotoController::class, 'file']);
+
 Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/user', function () {
         $user = auth()->user();
@@ -129,6 +135,109 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
             'message' => 'User authenticated successfully',
             ]);
         });
+
+    Route::post('/visits/{visitId}/breast-sync', [\App\Http\Controllers\Api\BreastSyncController::class, 'sync'])->whereNumber('visitId');
+Route::patch('/screening-samples/{id}/details', [\App\Http\Controllers\Api\SampleCorrectionController::class, 'update'])->whereNumber('id');
+Route::get('/identifiers/lookup', [\App\Http\Controllers\Api\IdentifierController::class, 'lookup']);
+Route::get('/clients/{clientId}/identifiers', [\App\Http\Controllers\Api\IdentifierController::class, 'forClient']);
+Route::get('/ai/status', [\App\Http\Controllers\Api\ReportSummaryController::class, 'status']);
+Route::post('/ai/report-summary', [\App\Http\Controllers\Api\ReportSummaryController::class, 'summarise']);
+
+// ══ Mobile app, staff notifications, chat, stock (restored) ══════════
+    // Client / sample lists (must stay above /clients/{client})
+    Route::get('/clients/list', [\App\Http\Controllers\Api\ClientListController::class, 'index']);
+    Route::get('/clients/mine', [\App\Http\Controllers\Api\MyClientsController::class, 'index']);
+    Route::get('/screening-samples/list', [\App\Http\Controllers\Api\SampleListController::class, 'index']);
+
+    // Phone notifications
+    Route::post('/mobile/push-token', [\App\Http\Controllers\Api\MobileNotificationController::class, 'registerToken']);
+    Route::delete('/mobile/push-token', [\App\Http\Controllers\Api\MobileNotificationController::class, 'removeToken']);
+    Route::get('/mobile/notifications', [\App\Http\Controllers\Api\MobileNotificationController::class, 'index']);
+    Route::get('/mobile/notifications/unread-count', [\App\Http\Controllers\Api\MobileNotificationController::class, 'unreadCount']);
+    Route::post('/mobile/notifications/read-all', [\App\Http\Controllers\Api\MobileNotificationController::class, 'markAllRead']);
+    Route::post('/mobile/notifications/{id}/read', [\App\Http\Controllers\Api\MobileNotificationController::class, 'markRead'])->whereNumber('id');
+    Route::post('/mobile/push-test', [\App\Http\Controllers\Api\MobileNotificationController::class, 'test']);
+
+    // Staff notifications (web: send, list, edit, resend, withdraw)
+    Route::get('/staff-notifications', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'index']);
+    Route::get('/staff-notifications/options', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'options']);
+    Route::post('/staff-notifications/preview', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'preview']);
+    Route::post('/staff-notifications', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'send']);
+    Route::get('/staff-notifications/{id}/recipients', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'recipients'])->whereNumber('id');
+    Route::put('/staff-notifications/{id}', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'update'])->whereNumber('id');
+    Route::post('/staff-notifications/{id}/resend', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'resend'])->whereNumber('id');
+    Route::delete('/staff-notifications/{id}', [\App\Http\Controllers\Api\StaffBroadcastController::class, 'withdraw'])->whereNumber('id');
+
+    // Follow-ups, SMS, result communication
+    Route::get('/mobile/follow-ups', [\App\Http\Controllers\Api\FollowUpController::class, 'index']);
+    Route::get('/mobile/follow-ups/history', [\App\Http\Controllers\Api\FollowUpController::class, 'history']);
+    Route::post('/mobile/follow-ups/contact', [\App\Http\Controllers\Api\FollowUpController::class, 'contact']);
+    Route::post('/mobile/sms', [\App\Http\Controllers\Api\FollowUpController::class, 'sms']);
+    Route::get('/mobile/results/communicated', [\App\Http\Controllers\Api\ResultCommunicationController::class, 'forClient']);
+    Route::get('/mobile/results/{sampleId}/communication', [\App\Http\Controllers\Api\ResultCommunicationController::class, 'show'])->whereNumber('sampleId');
+    Route::post('/mobile/results/{sampleId}/communication', [\App\Http\Controllers\Api\ResultCommunicationController::class, 'store'])->whereNumber('sampleId');
+
+    // Phones (heartbeat, remote sign-out / wipe)
+    Route::post('/mobile/devices/heartbeat', [\App\Http\Controllers\Api\StaffDeviceController::class, 'heartbeat']);
+    Route::post('/mobile/devices/done', [\App\Http\Controllers\Api\StaffDeviceController::class, 'done']);
+    Route::get('/mobile-admin/devices', [\App\Http\Controllers\Api\StaffDeviceController::class, 'index']);
+    Route::post('/mobile-admin/devices/{id}/sign-out', [\App\Http\Controllers\Api\StaffDeviceController::class, 'signOut'])->whereNumber('id');
+    Route::post('/mobile-admin/devices/{id}/wipe', [\App\Http\Controllers\Api\StaffDeviceController::class, 'wipe'])->whereNumber('id');
+    Route::post('/mobile-admin/devices/{id}/cancel', [\App\Http\Controllers\Api\StaffDeviceController::class, 'cancel'])->whereNumber('id');
+
+    // Stock (phone) and Stock Management (web)
+    Route::get('/stock', [\App\Http\Controllers\Api\StockController::class, 'index']);
+    Route::get('/stock/overview', [\App\Http\Controllers\Api\StockController::class, 'overview']);
+    Route::get('/stock/movements', [\App\Http\Controllers\Api\StockController::class, 'movements']);
+    Route::get('/stock/check', [\App\Http\Controllers\Api\StockController::class, 'check']);
+    Route::post('/stock/receive', [\App\Http\Controllers\Api\StockController::class, 'receive']);
+    Route::post('/stock/adjust', [\App\Http\Controllers\Api\StockController::class, 'adjust']);
+    Route::post('/stock/expired', [\App\Http\Controllers\Api\StockController::class, 'expired']);
+    Route::post('/stock/transfer', [\App\Http\Controllers\Api\StockController::class, 'transfer']);
+    Route::put('/stock/level', [\App\Http\Controllers\Api\StockController::class, 'setLowLevel']);
+    Route::get('/stock-admin/meta', [\App\Http\Controllers\Api\StockAdminController::class, 'meta']);
+    Route::get('/stock-admin/matrix', [\App\Http\Controllers\Api\StockAdminController::class, 'matrix']);
+    Route::post('/stock-admin/receive-bulk', [\App\Http\Controllers\Api\StockAdminController::class, 'receiveBulk']);
+    Route::get('/stock-admin/movements', [\App\Http\Controllers\Api\StockAdminController::class, 'movements']);
+    Route::get('/stock-admin/movements/export', [\App\Http\Controllers\Api\StockAdminController::class, 'export']);
+    Route::get('/stock-admin/expiring', [\App\Http\Controllers\Api\StockAdminController::class, 'expiring']);
+    Route::get('/stock-admin/items', [\App\Http\Controllers\Api\StockAdminController::class, 'items']);
+    Route::post('/stock-admin/items', [\App\Http\Controllers\Api\StockAdminController::class, 'storeItem']);
+    Route::put('/stock-admin/items/{id}', [\App\Http\Controllers\Api\StockAdminController::class, 'updateItem'])->whereNumber('id');
+
+    // Staff chat
+    Route::get('/mobile/staff', [\App\Http\Controllers\Api\StaffChatController::class, 'directory']);
+    Route::get('/mobile/staff/{id}', [\App\Http\Controllers\Api\StaffChatController::class, 'profile'])->whereNumber('id');
+    Route::get('/mobile/chats', [\App\Http\Controllers\Api\StaffChatController::class, 'index']);
+    Route::get('/mobile/chats/unread-count', [\App\Http\Controllers\Api\StaffChatController::class, 'unreadCount']);
+    Route::post('/mobile/chats', [\App\Http\Controllers\Api\StaffChatController::class, 'open']);
+    Route::get('/mobile/chats/{id}/messages', [\App\Http\Controllers\Api\StaffChatController::class, 'messages'])->whereNumber('id');
+    Route::post('/mobile/chats/{id}/messages', [\App\Http\Controllers\Api\StaffChatController::class, 'send'])->whereNumber('id');
+    Route::post('/mobile/chats/{id}/read', [\App\Http\Controllers\Api\StaffChatController::class, 'read'])->whereNumber('id');
+
+    // Help, problem reports, crash reports
+    Route::post('/mobile/support-tickets', [\App\Http\Controllers\Api\MobileSupportController::class, 'report']);
+    Route::post('/mobile/error-reports', [\App\Http\Controllers\Api\MobileSupportController::class, 'errors']);
+    Route::get('/mobile-admin/tickets', [\App\Http\Controllers\Api\MobileSupportController::class, 'tickets']);
+    Route::post('/mobile-admin/tickets/{id}/resolve', [\App\Http\Controllers\Api\MobileSupportController::class, 'resolve'])->whereNumber('id');
+    Route::get('/mobile-admin/errors', [\App\Http\Controllers\Api\MobileSupportController::class, 'errorSummary']);
+
+    // Profile photo
+    Route::get('/mobile/profile/photo', [\App\Http\Controllers\Api\ProfilePhotoController::class, 'show']);
+    Route::post('/mobile/profile/photo', [\App\Http\Controllers\Api\ProfilePhotoController::class, 'store']);
+    Route::delete('/mobile/profile/photo', [\App\Http\Controllers\Api\ProfilePhotoController::class, 'destroy']);
+
+    // App versions (web upload) and the "Get the app" prompt
+    Route::get('/mobile-admin/releases', [\App\Http\Controllers\Api\AppReleaseController::class, 'index']);
+    Route::post('/mobile-admin/releases', [\App\Http\Controllers\Api\AppReleaseController::class, 'store']);
+    Route::patch('/mobile-admin/releases/{id}', [\App\Http\Controllers\Api\AppReleaseController::class, 'update'])->whereNumber('id');
+    Route::delete('/mobile-admin/releases/{id}', [\App\Http\Controllers\Api\AppReleaseController::class, 'destroy'])->whereNumber('id');
+    Route::get('/mobile/app-promo', [\App\Http\Controllers\Api\MobileAppPromoController::class, 'forMe']);
+    Route::get('/mobile-admin/app-promo', [\App\Http\Controllers\Api\MobileAppPromoController::class, 'show']);
+    Route::put('/mobile-admin/app-promo', [\App\Http\Controllers\Api\MobileAppPromoController::class, 'update']);
+    // ══ end of restored block ═════════════════════════════════════════
+
+
 
         Route::get('/services', [ServiceController::class, 'index']);
         Route::get('/services/{slug}/facilities', [ServiceController::class, 'facilitiesForService']);
@@ -213,7 +322,7 @@ Route::post('/visits/{visitId}/lab-sync', [ScreeningSampleController::class, 'sy
     Route::post('/clients/{client}/risk-profile', [RiskProfileController::class, 'upsert']);
 
     Route::get('/clients/{client}/visits', [ScreeningVisitController::class, 'index']);
-    Route::post('/clients/{client}/visits', [ScreeningVisitController::class, 'store']);
+    Route::post('/clients/{client}/visits', [\App\Http\Controllers\Api\VisitStartController::class, 'store']);
     Route::get('/visits/{visit}', [ScreeningVisitController::class, 'show']);
     Route::post('/visits/{visit}/examination', [ScreeningVisitController::class, 'storeExamination']);
     Route::post('/visits/{visit}/outcome', [ScreeningVisitController::class, 'classifyOutcome']);
